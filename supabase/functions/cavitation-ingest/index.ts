@@ -1,0 +1,108 @@
+// Cavitation captures ingest. The lab PC uploader POSTs a batch of captures.
+//
+// Auth is the same two layers as `ingest`: apikey header = project publishable
+// key (platform gate), X-Api-Key = this plant's own key (device identity).
+//
+// Idempotent: a capture that already exists (same plant and capture_key) is
+// skipped, so the uploader can safely retry and never overwrites a flag.
+
+import "@supabase/functions-js/edge-runtime.d.ts";
+import { withSupabase } from "@supabase/server";
+import { authenticateDevice, jsonResponse } from "../_shared/device.ts";
+
+const MAX_BATCH = 20;
+const MAX_POINTS = 4000;
+const KEY_RE = /^\d{8}_\d{6}_\d{3}_ch\d_\d{5}$/;
+const CLASSES = new Set(["burst", "spike", "weak", "other"]);
+
+function num(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Returns a row, or a string describing why the item is invalid.
+function toRow(plantId: string, it: Record<string, unknown>): Record<string, unknown> | string {
+  const key = String(it.key ?? "");
+  if (!KEY_RE.test(key)) return `bad key ${key.slice(0, 40)}`;
+  if (!CLASSES.has(String(it.cls))) return `${key}: bad class`;
+  const ts = new Date(String(it.ts));
+  if (Number.isNaN(ts.getTime())) return `${key}: bad ts`;
+  const y = it.y;
+  if (!Array.isArray(y) || y.length < 2 || y.length > MAX_POINTS || !y.every((n) => Number.isInteger(n))) {
+    return `${key}: bad trace`;
+  }
+  const t0 = num(it.t0_us), t1 = num(it.t1_us);
+  if (t0 === null || t1 === null || t1 <= t0) return `${key}: bad time range`;
+  const flagged = it.flagged === true;
+  return {
+    plant_id: plantId,
+    capture_key: key,
+    ts: ts.toISOString(),
+    ch: num(it.ch) ?? 1,
+    cls: it.cls,
+    level_mv: num(it.level_mv),
+    peak_mv: num(it.peak_mv),
+    snr: num(it.snr),
+    dur_us: num(it.dur_us),
+    swings: num(it.swings),
+    freq_khz: num(it.freq_khz),
+    sigma_mv: num(it.sigma_mv),
+    vpp_mv: num(it.vpp_mv),
+    clipped: it.clipped === true,
+    t0_us: t0,
+    t1_us: t1,
+    ev0_us: num(it.ev0_us),
+    ev1_us: num(it.ev1_us),
+    y,
+    flagged,
+    flag_note: flagged ? String(it.note ?? "").slice(0, 300) : "",
+    flagged_at: flagged ? new Date().toISOString() : null,
+  };
+}
+
+export default {
+  fetch: withSupabase({ auth: ["publishable", "secret"] }, async (req, ctx) => {
+    if (req.method !== "POST") return jsonResponse({ error: "method not allowed" }, 405);
+
+    const device = await authenticateDevice(req, ctx.supabaseAdmin);
+    if (!device) return jsonResponse({ error: "invalid or missing X-Api-Key" }, 401);
+
+    let payload: { captures?: unknown };
+    try {
+      payload = await req.json();
+    } catch {
+      return jsonResponse({ error: "invalid JSON" }, 400);
+    }
+    const items = payload.captures;
+    if (!Array.isArray(items) || items.length === 0 || items.length > MAX_BATCH) {
+      return jsonResponse({ error: `captures must be an array of 1 to ${MAX_BATCH}` }, 400);
+    }
+
+    const rows: Record<string, unknown>[] = [];
+    const rejected: string[] = [];
+    for (const it of items) {
+      const r = toRow(device.plantId, (it ?? {}) as Record<string, unknown>);
+      if (typeof r === "string") rejected.push(r);
+      else rows.push(r);
+    }
+    if (rows.length === 0) return jsonResponse({ error: "no valid captures", rejected }, 400);
+
+    const { data, error } = await ctx.supabaseAdmin
+      .from("cavitation_captures")
+      .upsert(rows, { onConflict: "plant_id,capture_key", ignoreDuplicates: true })
+      .select("capture_key");
+    if (error) {
+      console.error("cavitation insert failed", error);
+      return jsonResponse({ error: "insert failed" }, 500);
+    }
+
+    return jsonResponse({
+      ok: true,
+      received: items.length,
+      inserted: data?.length ?? 0,
+      duplicates: rows.length - (data?.length ?? 0),
+      rejected,
+    }, 201);
+  }),
+};

@@ -179,6 +179,52 @@ try {
     await as(null, () => denied("update plants set name = 'pwned' where id = $1", [dp.id]));
   });
 
+  console.log("\nCavitation captures");
+  const cap = async (plant, key) => (await client.query(
+    `insert into cavitation_captures (plant_id, capture_key, ts, cls, t0_us, t1_us, y)
+     values ($1,$2,now(),'burst',-100,100,'{1,2,3}') returning id`, [plant, key])).rows[0].id;
+  const capA = await cap(pA, "20260921_120000_000_ch1_00001");
+  const capB = await cap(pB, "20260921_120000_000_ch1_00001");
+  await test("A sees own captures and none of B's", async () => {
+    const r = await as(uA, () => client.query("select plant_id from cavitation_captures where id in ($1,$2)", [capA, capB]));
+    eq(r.rows.map((x) => x.plant_id), [pA]);
+  });
+  await test("anon cannot see captures", async () => {
+    const r = await as(null, () => client.query("select 1 from cavitation_captures where id in ($1,$2)", [capA, capB]));
+    eq(r.rowCount, 0);
+  });
+  await test("cavitation_summary respects tenant isolation", async () => {
+    const r = await as(uA, () => client.query("select plant_id from cavitation_summary where plant_id in ($1,$2)", [pA, pB]));
+    eq(r.rows.map((x) => x.plant_id), [pA]);
+  });
+  await test("A can flag and annotate own capture", async () => {
+    const r = await as(uA, () => client.query(
+      "update cavitation_captures set flagged = true, flag_note = 'real', flagged_at = now() where id = $1", [capA]));
+    eq(r.rowCount, 1);
+  });
+  await test("A cannot flag B's capture", async () => {
+    await as(uA, () => denied("update cavitation_captures set flagged = true where id = $1", [capB]));
+  });
+  await test("A cannot edit trace or metrics, even on own capture", async () => {
+    await as(uA, () => denied("update cavitation_captures set y = '{9}' where id = $1", [capA]));
+    await as(uA, () => denied("update cavitation_captures set cls = 'weak' where id = $1", [capA]));
+  });
+  await test("nobody can insert or delete captures from the client", async () => {
+    await as(uA, () => denied(
+      `insert into cavitation_captures (plant_id, capture_key, ts, cls, t0_us, t1_us, y)
+       values ($1,'20260921_130000_000_ch1_00002',now(),'burst',-1,1,'{1,2}')`, [pA]));
+    await as(uA, () => denied("delete from cavitation_captures where id = $1", [capA]));
+  });
+  await test("flag note is limited to 300 characters", async () => {
+    await client.query("savepoint n");
+    let failed = false;
+    try {
+      await as(uA, () => client.query("update cavitation_captures set flag_note = $2 where id = $1", [capA, "x".repeat(301)]));
+    } catch { failed = true; }
+    await client.query("rollback to savepoint n");
+    eq(failed, true);
+  });
+
   console.log("\nPositive controls");
   await test("A can save irrigation config for their own plant", async () => {
     const r = await as(uA, () => client.query(

@@ -12,8 +12,9 @@ import IrrigationBlock, { type IrrigationPayload } from "./irrigation-block";
 import EnvTab from "./env-tab";
 import AeTab from "./ae-tab";
 import EventsTab from "./events-tab";
+import CavitationTab from "./cavitation-tab";
 
-export type PanelTab = "ae" | "env" | "events";
+export type PanelTab = "ae" | "env" | "events" | "cav";
 
 export default function MetricsPanel({
   node, t, lang, isLive, sensors, panelSensor, onPanelSensor, tab, onTab,
@@ -32,9 +33,9 @@ export default function MetricsPanel({
   const dot = panelSensor ? sensors.find((s) => s.id === panelSensor) : undefined;
   const sourceLabel = dot ? `${node.label} · ${dot.label}` : node.label;
   const ae = dot ? dot.ae : node.ae;
-  const tabs: { id: PanelTab; label: string }[] = [
-    { id: "ae", label: t.tabAe }, { id: "env", label: t.tabEnv }, { id: "events", label: t.tabEvents },
-  ];
+  const tabs: { id: PanelTab; label: string }[] = isLive
+    ? [{ id: "env", label: t.tabEnv }, { id: "cav", label: t.tabCav }]
+    : [{ id: "ae", label: t.tabAe }, { id: "env", label: t.tabEnv }, { id: "events", label: t.tabEvents }];
 
   return (
     <div className="flex flex-col rounded-xl border border-border bg-bg px-[18px] py-4 min-[901px]:h-full min-[901px]:min-h-0">
@@ -80,24 +81,24 @@ export default function MetricsPanel({
         </div>
       )}
 
-      {!isLive && (
-        <div className="-mb-px mt-3 flex flex-none gap-0.5 border-b border-border">
-          {tabs.map((x) => (
-            <button
-              key={x.id}
-              onClick={() => onTab(x.id)}
-              className={`-mb-px border-b-2 px-2.5 py-2 text-xs font-semibold ${
-                tab === x.id ? "border-accent text-ink" : "border-transparent text-ink2"
-              }`}
-            >
-              {x.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="-mb-px mt-3 flex flex-none gap-0.5 border-b border-border">
+        {tabs.map((x) => (
+          <button
+            key={x.id}
+            onClick={() => onTab(x.id)}
+            className={`-mb-px border-b-2 px-2.5 py-2 text-xs font-semibold ${
+              tab === x.id ? "border-accent text-ink" : "border-transparent text-ink2"
+            }`}
+          >
+            {x.label}
+          </button>
+        ))}
+      </div>
 
       <div className="mt-3 flex flex-col gap-3.5 min-[901px]:min-h-0 min-[901px]:flex-1 min-[901px]:overflow-y-auto">
-        {isLive || tab === "env" ? (
+        {isLive && tab === "cav" ? (
+          <CavitationTab key={node.id} plantId={node.id} t={t} lang={lang} canFlag={canEditIrrigation} />
+        ) : isLive || tab === "env" ? (
           <EnvTab
             t={t} lang={lang} isLive={isLive} dates={dates} env={env} sourceLabel={sourceLabel}
             envVar={envVar} onEnvVar={onEnvVar} range={range} onRange={onRange} loading={loading}

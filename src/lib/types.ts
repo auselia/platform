@@ -38,3 +38,39 @@ export type IrrigationConfig = {
   enabled: boolean;
   updated_at: string;
 };
+
+export type CavClass = "burst" | "spike" | "weak" | "other";
+
+// A saved oscilloscope capture, without the trace (see CavitationTrace).
+export type Cavitation = {
+  id: number;
+  plant_id: string;
+  capture_key: string;
+  ts: string;
+  cls: CavClass;
+  level_mv: number | null;
+  peak_mv: number | null;
+  snr: number | null;
+  dur_us: number | null;
+  swings: number | null;
+  freq_khz: number | null;
+  clipped: boolean;
+  t0_us: number;
+  t1_us: number;
+  ev0_us: number | null;
+  ev1_us: number | null;
+  flagged: boolean;
+  flag_note: string;
+};
+
+// y is the min/max-decimated trace in units of 0.1 mV, evenly spread from t0_us to t1_us.
+export type CavitationTrace = { id: number; y: number[] };
+
+export type CavitationSummary = {
+  plant_id: string;
+  total: number;
+  last_24h: number;
+  last_7d: number;
+  flagged: number;
+  last_capture_at: string | null;
+};
