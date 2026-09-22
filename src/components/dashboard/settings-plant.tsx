@@ -6,7 +6,7 @@ import type { Strings } from "@/lib/dashboard/i18n";
 // A read-only identity card, not an edit form: Plant only has id/org_id/name/variety in the
 // database, and there is no update mutation anywhere in the app for it or for an org. Adding
 // one is a separate, later piece of work, not something to fake here.
-export default function SettingsGeneral({
+export default function SettingsPlant({
   node, orgName, t,
 }: {
   node: DNode; orgName: string; t: Strings;

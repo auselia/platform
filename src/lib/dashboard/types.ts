@@ -12,9 +12,8 @@ export type DNode = {
   sensorCount: number;
   mmPlan: number | null;
   mmDelta: number;
-  ae: number[];
 };
 
 export type Severity = "critical" | "warning" | "good";
 
-export type PanelTab = "env" | "cav" | "ae" | "events" | "settings";
+export type PanelTab = "general" | "env" | "stress" | "settings";

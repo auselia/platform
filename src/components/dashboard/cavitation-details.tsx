@@ -167,7 +167,7 @@ function Trace({ c, y, t }: { c: Cavitation; y: number[] | undefined; t: Strings
   return (
     <svg
       viewBox={`0 0 ${VW} ${VH}`} className="w-full rounded-lg border border-border bg-bg text-ink touch-none"
-      role="img" aria-label={`${t.tabCav}: ${c.peak_mv ?? ""} mV`}
+      role="img" aria-label={`${t.tabStress}: ${c.peak_mv ?? ""} mV`}
       onPointerMove={onMove} onPointerLeave={() => setHover(null)}
     >
       {c.ev0_us !== null && c.ev1_us !== null && (

@@ -1,9 +1,8 @@
 "use client";
 
-export type SettingsSection = "general" | "irrigation" | "oscilloscope";
+export type SettingsSection = "plant" | "irrigation" | "stress";
 
-// The left-top slot for the Settings tab: a vertical list of sections, in the same box the
-// day/range picker sits in for other tabs, so the left column's outer shape never changes.
+// The left-top slot for the Settings tab: a vertical list of sections.
 export default function SettingsNav({
   sections, active, onSelect,
 }: {

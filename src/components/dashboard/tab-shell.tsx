@@ -8,35 +8,35 @@ import type { SensorDot } from "@/lib/dashboard/sim";
 import type { Geo } from "@/lib/dashboard/geo";
 import type { DNode, PanelTab, Severity } from "@/lib/dashboard/types";
 import { useCavitationData } from "@/lib/dashboard/use-cavitation-data";
+import { demoStorageGet, demoStorageSet } from "@/lib/dashboard/demo-storage";
 import { STATUS_COLOR } from "@/lib/status";
 import StatusIcon from "@/components/status-icon";
 import { StatusPill, Segmented } from "./ui";
 import { ENV_KEYS, lastNonNull } from "@/lib/dashboard/env";
 import LineChart from "./line-chart";
 import DayPicker from "./day-picker";
-import MapPanel from "./map-panel";
+import GeneralTab from "./general-tab";
 import CavitationGrid from "./cavitation-grid";
 import CavitationDetails from "./cavitation-details";
 import CavitationDialog from "./cavitation-dialog";
 import IrrigationBlock, { type IrrigationPayload } from "./irrigation-block";
 import SettingsNav, { type SettingsSection } from "./settings-nav";
-import SettingsGeneral from "./settings-general";
-import SettingsOscilloscope from "./settings-oscilloscope";
-import AeTab from "./ae-tab";
-import EventsTab from "./events-tab";
+import SettingsPlant from "./settings-plant";
+import SettingsStress from "./settings-stress";
 import type { Layout } from "./map-view";
 
-// The one shell every tab renders inside: a day/range picker (or, for Settings, a section
-// list) and a small locator map on the left, the tab's main content center stage, and
-// (except for Settings, which has no "selected thing" to detail) a details column on the
-// right. Desktop only (min-[1040px]); below that it falls back to a plain stacked column.
+// The one shell every tab renders inside. General is the farm-wide landing view (map + a
+// status-sorted plant list, no picker, no details column). Every other tab is a focused,
+// single-plant view with no map of its own - just a "back to General" link and a plant
+// switcher (below the tab bar) instead. Desktop only (min-[1040px]); below that it falls
+// back to a plain stacked column.
 export default function TabShell({
   node, t, lang, isLive, tab, onTab, canEditIrrigation,
   sensors, panelSensor, onPanelSensor,
   dates, env, envVar, onEnvVar, range, onRange, loading,
   rows, anchorMs, dayAnchor, onDayAnchor, lastUpdated,
   geo, nodes, selectedId, filters, counts, onToggleFilter, onSelect, layoutFor,
-  orgName, irrigation, onSaveIrrigation,
+  orgName, irrigation, onSaveIrrigation, summary,
 }: {
   node: DNode; t: Strings; lang: Lang; isLive: boolean;
   tab: PanelTab; onTab: (t: PanelTab) => void; canEditIrrigation: boolean;
@@ -51,42 +51,60 @@ export default function TabShell({
   layoutFor: (n: DNode) => Layout;
   orgName: string; irrigation: IrrigationConfig | null;
   onSaveIrrigation: (p: IrrigationPayload) => Promise<boolean>;
+  summary: string;
 }) {
   const locale = lang === "es" ? "es-CL" : undefined;
   const cav = useCavitationData(node.id, dayAnchor, range);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [section, setSection] = useState<SettingsSection>("general");
+  const [section, setSection] = useState<SettingsSection>("plant");
 
-  // Off by default for everyone, including the demo: the full FFT/raw-parameter view is
-  // opt-in, and only a signed-in partner has a Settings tab to opt in from (see
-  // settings-oscilloscope.tsx). A demo visitor always sees the simplified view.
+  // Off by default for everyone. Live persists the choice in localStorage, same as theme/lang.
+  // The demo persists it too, but only for the session (sessionStorage) - it should reset
+  // once the visitor leaves, not linger like a real account's preference would. Re-reads on
+  // isLive changing (not just on mount) so switching orgs can't leak one org type's stored
+  // value into the other's display.
   const [advanced, setAdvanced] = useState(false);
   useEffect(() => {
-    try {
-      if (localStorage.getItem("auselia-cav-advanced") === "1") setAdvanced(true);
-    } catch {}
-  }, []);
+    if (isLive) {
+      try { setAdvanced(localStorage.getItem("auselia-cav-advanced") === "1"); } catch { setAdvanced(false); }
+    } else {
+      setAdvanced(demoStorageGet<boolean>("advanced") ?? false);
+    }
+  }, [isLive]);
   const setAdvancedPersist = (v: boolean) => {
     setAdvanced(v);
-    try { localStorage.setItem("auselia-cav-advanced", v ? "1" : "0"); } catch {}
+    if (isLive) {
+      try { localStorage.setItem("auselia-cav-advanced", v ? "1" : "0"); } catch {}
+    } else {
+      demoStorageSet("advanced", v);
+    }
   };
 
+  const isGeneral = tab === "general";
   const isSettings = tab === "settings";
-  const hasPicker = tab === "env" || tab === "cav";
+  const hasPicker = tab === "env" || tab === "stress";
 
-  const tabs: { id: PanelTab; label: string }[] = isLive
-    ? [{ id: "env", label: t.tabEnv }, { id: "cav", label: t.tabCav }, { id: "settings", label: t.tabSettings }]
-    : [{ id: "ae", label: t.tabAe }, { id: "env", label: t.tabEnv }, { id: "cav", label: t.tabCav }, { id: "events", label: t.tabEvents }];
+  const tabs: { id: PanelTab; label: string }[] = [
+    { id: "general", label: t.tabGeneral },
+    { id: "env", label: t.tabEnv },
+    { id: "stress", label: t.tabStress },
+    { id: "settings", label: t.tabSettings },
+  ];
 
   const settingsSections: { id: SettingsSection; label: string }[] = [
-    { id: "general", label: t.settingsGeneral },
-    ...(canEditIrrigation ? [{ id: "irrigation" as const, label: t.settingsIrrigation }] : []),
-    { id: "oscilloscope", label: t.settingsOscilloscope },
+    { id: "plant", label: t.settingsPlant },
+    { id: "irrigation", label: t.settingsIrrigation },
+    { id: "stress", label: t.settingsStress },
   ];
+
+  // Picking a plant from General commits straight into the focused view - no "zoom and
+  // linger" step, matching how map-panel.tsx's own enlarge popover already treats a cuartel
+  // click as "pick it and leave," not an intermediate state.
+  const enterPlant = (id: string) => { onSelect(id); onTab("env"); };
+  const enterSensor = (dotId: string) => { onPanelSensor(dotId); onTab("env"); };
 
   const dot = panelSensor ? sensors.find((s) => s.id === panelSensor) : undefined;
   const sourceLabel = dot ? `${node.label} · ${dot.label}` : node.label;
-  const ae = dot ? dot.ae : node.ae;
 
   const meta = ENV_KEYS.find((v) => v.key === envVar)!;
   const pairs: { d: Date; v: number }[] = [];
@@ -102,62 +120,79 @@ export default function TabShell({
     <div
       className={`grid grid-cols-1 gap-[18px] min-[901px]:min-h-0 min-[901px]:flex-1 min-[901px]:overflow-y-auto
       min-[1040px]:grid-rows-[auto_minmax(0,1fr)] ${
-        isSettings
+        isGeneral
+          ? "min-[1040px]:grid-cols-1"
+          : isSettings
           ? "min-[1040px]:grid-cols-[minmax(210px,23%)_minmax(0,1fr)]"
           : "min-[1040px]:grid-cols-[minmax(210px,23%)_minmax(0,1fr)_minmax(230px,24%)]"
       }`}
       // TODO: tighten the 901-1039px and mobile stacked fallback for this shell.
     >
-      <div className="col-span-full flex flex-none gap-0.5 border-b border-border">
-        {tabs.map((x) => (
-          <button
-            key={x.id}
-            onClick={() => onTab(x.id)}
-            className={`-mb-px border-b-2 px-2.5 py-2 text-xs font-semibold ${
-              tab === x.id ? "border-accent text-ink" : "border-transparent text-ink2"
-            }`}
-          >
-            {x.label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-col gap-3.5 min-[1040px]:min-h-0">
-        {hasPicker && (
-          <div className="rounded-xl border border-border bg-bg p-3.5 min-[1040px]:flex-[0_0_58%] min-[1040px]:min-h-0 min-[1040px]:overflow-y-auto">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <Segmented value={range} onChange={onRange} options={[
-                { value: "day", label: t.rangeDay }, { value: "week", label: t.rangeWeek }, { value: "month", label: t.rangeMonth },
-              ]} />
-              {dayAnchor && (
-                <button onClick={() => onDayAnchor(null)} className="text-[11px] font-semibold text-accent">
-                  {t.dayPickerToday}
-                </button>
-              )}
-            </div>
-            <DayPicker rows={rows} anchor={anchorMs} dayAnchor={dayAnchor} onDayAnchor={(d) => { onDayAnchor(d); onRange("day"); }} t={t} lang={lang} />
-          </div>
-        )}
-        {isSettings && (
-          <div className="rounded-xl border border-border bg-bg p-3.5 min-[1040px]:flex-[0_0_58%] min-[1040px]:min-h-0 min-[1040px]:overflow-y-auto">
-            <SettingsNav sections={settingsSections} active={section} onSelect={setSection} />
-          </div>
-        )}
-        <div
-          className={`min-h-[200px] rounded-xl border border-border bg-bg p-2 min-[1040px]:min-h-0 ${
-            hasPicker || isSettings ? "min-[1040px]:flex-[0_0_42%]" : "min-[1040px]:flex-1"
-          }`}
-        >
-          <MapPanel
-            geo={geo} nodes={nodes} isLive={isLive} selectedId={selectedId} filters={filters} counts={counts} t={t}
-            onToggleFilter={onToggleFilter} onSelect={onSelect} layoutFor={layoutFor}
-            onViewFullSensor={(id) => onPanelSensor(id)}
-          />
+      <div className="col-span-full flex flex-col gap-2">
+        <div className="flex flex-none gap-0.5 border-b border-border">
+          {tabs.map((x) => (
+            <button
+              key={x.id}
+              onClick={() => onTab(x.id)}
+              className={`-mb-px border-b-2 px-2.5 py-2 text-xs font-semibold ${
+                tab === x.id ? "border-accent text-ink" : "border-transparent text-ink2"
+              }`}
+            >
+              {x.label}
+            </button>
+          ))}
         </div>
+        {!isGeneral && (
+          <div className="flex flex-none flex-wrap items-center gap-2">
+            <button onClick={() => onTab("general")} className="text-xs font-semibold text-accent">
+              &larr; {t.backToGeneral}
+            </button>
+            <select
+              aria-label={t.switchPlantAria}
+              value={selectedId ?? ""}
+              onChange={(e) => onSelect(e.target.value)}
+              className="rounded-lg border border-border bg-surface px-2 py-1 text-xs font-semibold text-ink"
+            >
+              {nodes.map((n) => (
+                <option key={n.id} value={n.id}>{n.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
-      <div className="rounded-xl border border-border bg-bg p-4 min-[1040px]:min-h-0 min-[1040px]:overflow-y-auto">
-        {tab === "cav" ? (
+      {!isGeneral && (
+        <div className="flex flex-col gap-3.5 min-[1040px]:min-h-0">
+          {hasPicker && (
+            <div className="flex-1 rounded-xl border border-border bg-bg p-3.5 min-[1040px]:min-h-0 min-[1040px]:overflow-y-auto">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <Segmented value={range} onChange={onRange} options={[
+                  { value: "day", label: t.rangeDay }, { value: "week", label: t.rangeWeek }, { value: "month", label: t.rangeMonth },
+                ]} />
+                {dayAnchor && (
+                  <button onClick={() => onDayAnchor(null)} className="text-[11px] font-semibold text-accent">
+                    {t.dayPickerToday}
+                  </button>
+                )}
+              </div>
+              <DayPicker rows={rows} anchor={anchorMs} dayAnchor={dayAnchor} onDayAnchor={(d) => { onDayAnchor(d); onRange("day"); }} t={t} lang={lang} />
+            </div>
+          )}
+          {isSettings && (
+            <div className="flex-1 rounded-xl border border-border bg-bg p-3.5 min-[1040px]:min-h-0 min-[1040px]:overflow-y-auto">
+              <SettingsNav sections={settingsSections} active={section} onSelect={setSection} />
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className={isGeneral ? "min-[1040px]:min-h-0" : "rounded-xl border border-border bg-bg p-4 min-[1040px]:min-h-0 min-[1040px]:overflow-y-auto"}>
+        {isGeneral ? (
+          <GeneralTab
+            summary={summary} geo={geo} nodes={nodes} isLive={isLive} selectedId={selectedId} filters={filters} counts={counts} t={t}
+            onToggleFilter={onToggleFilter} onSelect={enterPlant} layoutFor={layoutFor} onViewFullSensor={enterSensor}
+          />
+        ) : tab === "stress" ? (
           !cav.loaded ? (
             <div className="text-xs text-ink2">{t.loading}…</div>
           ) : cav.failed && !cav.items.length ? (
@@ -170,20 +205,16 @@ export default function TabShell({
               t={t} locale={locale} advanced={advanced}
             />
           )
-        ) : tab === "ae" ? (
-          <AeTab t={t} lang={lang} ae={ae} sourceLabel={sourceLabel} />
-        ) : tab === "events" ? (
-          <EventsTab t={t} lang={lang} nodeLabel={node.label} ae={ae} sensorCount={node.sensorCount} fixedSensor={dot?.label} />
         ) : isSettings ? (
           section === "irrigation" ? (
             <IrrigationBlock config={irrigation} t={t} onSave={onSaveIrrigation} />
-          ) : section === "oscilloscope" ? (
-            <SettingsOscilloscope
+          ) : section === "stress" ? (
+            <SettingsStress
               summary={cav.summary} loaded={cav.loaded} t={t}
               advanced={advanced} onAdvanced={setAdvancedPersist}
             />
           ) : (
-            <SettingsGeneral node={node} orgName={orgName} t={t} />
+            <SettingsPlant node={node} orgName={orgName} t={t} />
           )
         ) : (
           <>
@@ -201,15 +232,13 @@ export default function TabShell({
         )}
       </div>
 
-      {!isSettings && (
+      {!isSettings && !isGeneral && (
         <div className="flex flex-col gap-3.5 min-[1040px]:min-h-0 min-[1040px]:overflow-y-auto">
-          {tab === "cav" ? (
+          {tab === "stress" ? (
             <CavitationDetails
               c={cav.selected} y={cav.selected ? cav.traces[cav.selected.id] : undefined} t={t} locale={locale}
               canFlag={canEditIrrigation} onFlag={cav.saveFlag} onOpen={() => setDialogOpen(true)} advanced={advanced}
             />
-          ) : tab === "ae" || tab === "events" ? (
-            <CuartelHeader node={node} lastUpdated={lastUpdated} t={t} />
           ) : (
             <>
               <CuartelHeader node={node} lastUpdated={lastUpdated} t={t} />

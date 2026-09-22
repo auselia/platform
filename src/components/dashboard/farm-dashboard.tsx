@@ -11,6 +11,7 @@ import { DEMO_GEO } from "@/lib/dashboard/demo-geo";
 import { buildEnv, type EnvKey, type Range } from "@/lib/dashboard/env";
 import { buildSensorLayout, liveSensor, simNode, type SensorDot } from "@/lib/dashboard/sim";
 import type { DNode, PanelTab, Severity } from "@/lib/dashboard/types";
+import { demoStorageGet, demoStorageSet } from "@/lib/dashboard/demo-storage";
 import ThemeToggle from "@/components/theme-toggle";
 import Wordmark from "@/components/wordmark";
 import TabShell from "./tab-shell";
@@ -60,7 +61,7 @@ export default function FarmDashboard({
 
   const [range, setRange] = useState<Range>("day");
   const [envVar, setEnvVar] = useState<EnvKey>("moisture");
-  const [tab, setTab] = useState<PanelTab>("env");
+  const [tab, setTab] = useState<PanelTab>("general");
   const [dayAnchor, setDayAnchor] = useState<Date | null>(null);
   const [panelSensor, setPanelSensor] = useState<string | null>(null);
   const [filters, setFilters] = useState<Record<Severity, boolean>>({ critical: true, warning: true, good: true });
@@ -97,7 +98,7 @@ export default function FarmDashboard({
   useEffect(() => {
     let cancelled = false;
     setPlantsLoaded(false); setPlants([]); setIngest({}); setRows([]); setRowsLoaded(false);
-    setSelectedId(null); setPanelSensor(null); setEnvVar("moisture"); setTab(isDemo ? "ae" : "env"); setDayAnchor(null);
+    setSelectedId(null); setPanelSensor(null); setEnvVar("moisture"); setTab("general"); setDayAnchor(null);
     loadOrg(orgId).then(({ list, map }) => {
       if (cancelled || !list.length) return;
       // demo opens on the most stressed plot, like the original dashboard
@@ -130,6 +131,8 @@ export default function FarmDashboard({
       const iv = setInterval(() => loadRows(selectedId), 5 * 60 * 1000);
       return () => clearInterval(iv);
     }
+    // Demo: sandboxed, session-only (see saveIrrigationDemo below), never a real query.
+    setIrrigation(demoStorageGet<IrrigationConfig>(`irrigation:${selectedId}`));
   }, [selectedId, isLive, loadRows, supabase]);
 
   const geo: Geo = useMemo(() => (isDemo ? DEMO_GEO : gridGeo(plants.length)), [isDemo, plants.length]);
@@ -149,7 +152,7 @@ export default function FarmDashboard({
         id: p.id, label, variety: p.variety, area: cu.area_ha, path: cu.path, status, isLive,
         stress: sim?.stress ?? 0,
         sensorCount: (sim?.sensorCount ?? 1) + (extraSensors[p.id] ?? 0),
-        mmPlan: sim?.mmPlan ?? null, mmDelta: sim?.mmDelta ?? 0, ae: sim?.ae ?? [],
+        mmPlan: sim?.mmPlan ?? null, mmDelta: sim?.mmDelta ?? 0,
       });
     });
     return out;
@@ -189,7 +192,7 @@ export default function FarmDashboard({
     setSelectedId(id); setEnvVar("moisture"); setPanelSensor(null); setDayAnchor(null);
   };
 
-  async function saveIrrigation(p: IrrigationPayload) {
+  async function saveIrrigationLive(p: IrrigationPayload) {
     if (!selectedId) return false;
     const { data, error } = await supabase
       .from("irrigation_config")
@@ -199,6 +202,21 @@ export default function FarmDashboard({
     setIrrigation(data as IrrigationConfig);
     return true;
   }
+
+  // Demo: never touches Supabase (anon writes are rejected by RLS anyway - only
+  // is_org_member can write irrigation_config), and lives in sessionStorage so it resets
+  // once the visitor's tab/browser closes instead of lingering like a real account's would.
+  // The artificial delay just makes irrigation-block.tsx's "Saving..." status visible.
+  async function saveIrrigationDemo(p: IrrigationPayload) {
+    if (!selectedId) return false;
+    await new Promise((r) => setTimeout(r, 250));
+    const cfg: IrrigationConfig = { plant_id: selectedId, ...p, updated_at: new Date().toISOString() };
+    demoStorageSet(`irrigation:${selectedId}`, cfg);
+    setIrrigation(cfg);
+    return true;
+  }
+
+  const onSaveIrrigation = isLive ? saveIrrigationLive : saveIrrigationDemo;
 
   const lastUpdated = rows.length ? relTime(new Date(rows[rows.length - 1].ts), t) : null;
 
@@ -297,7 +315,7 @@ export default function FarmDashboard({
       </div>
 
       <div className="mt-3 flex flex-col min-[901px]:min-h-0 min-[901px]:flex-1">
-        <div className="mb-2.5 flex-none text-[13px] text-ink2">{summary || `${t.loading}…`}</div>
+        {!node && <div className="mb-2.5 flex-none text-[13px] text-ink2">{t.loading}…</div>}
 
         {plantsLoaded && !nodes.length ? (
           <p className="py-16 text-center text-sm text-ink2">{t.noPlants}</p>
@@ -312,7 +330,8 @@ export default function FarmDashboard({
             geo={geo} nodes={nodes} selectedId={selectedId} filters={filters} counts={counts}
             onToggleFilter={(s) => setFilters((f) => ({ ...f, [s]: !f[s] }))}
             onSelect={selectNode} layoutFor={layoutFor}
-            orgName={org.name} irrigation={irrigation} onSaveIrrigation={saveIrrigation}
+            orgName={org.name} irrigation={irrigation} onSaveIrrigation={onSaveIrrigation}
+            summary={summary}
           />
         ) : null}
       </div>

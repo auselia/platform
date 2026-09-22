@@ -6,8 +6,8 @@ import { relTime } from "./ui";
 
 // Status only, not device configuration: trigger level, timebase and capture cadence live
 // in the separate oscilloscope logger tool on the lab PC, not in this app. Reuses the
-// summary the shell already fetches for the Cavitations tab, no extra query.
-export default function SettingsOscilloscope({
+// summary the shell already fetches for the Stress events tab, no extra query.
+export default function SettingsStress({
   summary, loaded, t, advanced, onAdvanced,
 }: {
   summary: CavitationSummary | null; loaded: boolean; t: Strings;
