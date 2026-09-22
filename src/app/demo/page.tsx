@@ -14,7 +14,7 @@ export default async function DemoPage() {
 
   if (!org) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-bg px-4 text-ink">
+      <main className="flex min-h-screen items-center justify-center bg-page px-4 text-ink">
         <p className="text-sm text-ink2">Demo isn&apos;t set up yet.</p>
       </main>
     );

@@ -5,7 +5,7 @@ import Wordmark from "@/components/wordmark";
 
 export default function Home() {
   return (
-    <main className="relative flex min-h-dvh flex-col overflow-hidden bg-bg text-ink">
+    <main className="brand-surface relative flex min-h-dvh flex-col overflow-hidden bg-bg text-ink">
       <div className="relative z-10 mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-6">
         <Wordmark size={28} />
         <div className="flex items-center gap-3">

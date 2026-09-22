@@ -29,7 +29,7 @@ export default async function DashboardPage({
 
   if (realOrgs.length === 0) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-bg px-4">
+      <main className="flex min-h-screen items-center justify-center bg-page px-4">
         <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-8">
           <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-ink">
             Name your organization

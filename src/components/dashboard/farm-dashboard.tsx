@@ -297,7 +297,7 @@ export default function FarmDashboard({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-col rounded-2xl border border-border bg-surface px-5 py-[18px] min-[901px]:min-h-0 min-[901px]:flex-1">
+      <div className="mt-3 flex flex-col min-[901px]:min-h-0 min-[901px]:flex-1">
         <div className="mb-2.5 flex-none text-[13px] text-ink2">{summary || `${t.loading}…`}</div>
 
         {plantsLoaded && !nodes.length ? (
@@ -333,7 +333,7 @@ export default function FarmDashboard({
 
       {modal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-forest/45 p-5"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-5"
           onClick={() => setModal(null)}
         >
           <AddSensorModal

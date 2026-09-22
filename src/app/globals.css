@@ -1,8 +1,18 @@
 @import "tailwindcss";
 
-/* Ausalia brand tokens - see AUSALIA_BRAND.md in the design handoff.
-   Light theme is the bare :root default; dark follows prefers-color-scheme,
-   with a [data-theme] override reserved for a future manual toggle. */
+/* Auselia brand palette (fixed) and the interface theme (light and dark).
+
+   Interface theme: graphite and white. Neutral surfaces do the structure and
+   the brand shows in details: forest-tinted ink, canopy or sap for selection
+   and buttons, amber only for signal, and the type.
+
+     --page     canvas behind everything
+     --bg       cards and panels (the main reading surface)
+     --surface  controls, popups, tooltips (one step above a card in dark)
+     --surface-2  hover and subtle fills
+
+   Light is the :root default. Dark follows prefers-color-scheme, and
+   [data-theme] overrides both (set by the theme toggle). */
 :root {
   --forest: #14261c;
   --canopy: #1b3a2b;
@@ -12,57 +22,103 @@
   --sap: #a9c7a0;
   --bone: #f4f1ea;
   --bone-2: #ede8dc;
-  --ink: #1a1a1a;
   --grey: #6a7a6f;
 
   --status-ok: #5c7a63;
   --status-stress: #e8a13a;
-  --status-critical: #c0491f;
-  --status-idle: #7a8a80;
+  --status-critical: #b8431a;
+  --status-idle: #8a928c;
 
-  /* structural tokens the app actually consumes */
-  --bg: #f4f1ea;
-  --surface: #ede8dc;
-  --ink2: #5c7a63;
+  --page: #f7f6f2;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f3f2ee;
+  --ink: #14261c;
+  --ink2: #5d6a60;
   --accent: #1b3a2b;
   --accent-ink: #f4f1ea;
-  --surface-2: color-mix(in srgb, #ede8dc 88%, #1b3a2b 6%);
-  --accent-soft: color-mix(in srgb, #1b3a2b 12%, transparent);
+  --accent-soft: color-mix(in srgb, #1b3a2b 9%, transparent);
+  --map-ok: #dce3d6;
   --river: #4f8fd1;
   --wm-aus: #1b3a2b;
   --wm-alia: #1b3a2b;
-  --border: rgba(20, 38, 28, 0.14);
+  --border: rgba(20, 38, 28, 0.12);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #14261c;
-    --surface: #1b3a2b;
-    --ink: #f4f1ea;
-    --ink2: #a9c7a0;
+    --status-ok: #7fa58a;
+    --status-critical: #e0693f;
+    --status-idle: #7c837e;
+    --page: #101211;
+    --bg: #181b19;
+    --surface: #1f2321;
+    --surface-2: #262b28;
+    --ink: #eceeea;
+    --ink2: #a0a6a1;
     --accent: #a9c7a0;
-    --accent-ink: #14261c;
-    --surface-2: color-mix(in srgb, #1b3a2b 72%, #14261c 28%);
-    --accent-soft: color-mix(in srgb, #a9c7a0 18%, transparent);
+    --accent-ink: #101211;
+    --accent-soft: color-mix(in srgb, #a9c7a0 16%, transparent);
+    --map-ok: #272c29;
     --river: #5aa3e8;
     --wm-aus: #f4f1ea;
     --wm-alia: #e8a13a;
-    --border: rgba(244, 241, 234, 0.14);
+    --border: rgba(236, 238, 234, 0.11);
   }
 }
 
 :root[data-theme="dark"] {
+  --status-ok: #7fa58a;
+  --status-critical: #e0693f;
+  --status-idle: #7c837e;
+  --page: #101211;
+  --bg: #181b19;
+  --surface: #1f2321;
+  --surface-2: #262b28;
+  --ink: #eceeea;
+  --ink2: #a0a6a1;
+  --accent: #a9c7a0;
+  --accent-ink: #101211;
+  --accent-soft: color-mix(in srgb, #a9c7a0 16%, transparent);
+  --map-ok: #272c29;
+  --river: #5aa3e8;
+  --wm-aus: #f4f1ea;
+  --wm-alia: #e8a13a;
+  --border: rgba(236, 238, 234, 0.11);
+}
+
+/* The landing hero keeps the original bone/forest brand surface: it is a
+   moment, not a workspace, and it is the one place the full brand color
+   is the point. Only the actual dashboard (below) moved to graphite and
+   white. Same variable names, redefined inside this scope, so shared
+   pieces like the theme toggle and the plant mark pick them up too. */
+.brand-surface {
+  --page: #f4f1ea;
+  --bg: #f4f1ea;
+  --ink: #1a1a1a;
+  --ink2: #5c7a63;
+  --accent: #1b3a2b;
+  --accent-ink: #f4f1ea;
+  --border: rgba(20, 38, 28, 0.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .brand-surface {
+    --page: #14261c;
+    --bg: #14261c;
+    --ink: #f4f1ea;
+    --ink2: #a9c7a0;
+    --accent: #a9c7a0;
+    --accent-ink: #14261c;
+    --border: rgba(244, 241, 234, 0.14);
+  }
+}
+:root[data-theme="dark"] .brand-surface {
+  --page: #14261c;
   --bg: #14261c;
-  --surface: #1b3a2b;
   --ink: #f4f1ea;
   --ink2: #a9c7a0;
   --accent: #a9c7a0;
   --accent-ink: #14261c;
-  --surface-2: color-mix(in srgb, #1b3a2b 72%, #14261c 28%);
-  --accent-soft: color-mix(in srgb, #a9c7a0 18%, transparent);
-  --river: #5aa3e8;
-  --wm-aus: #f4f1ea;
-  --wm-alia: #e8a13a;
   --border: rgba(244, 241, 234, 0.14);
 }
 
@@ -81,7 +137,9 @@
   --color-status-critical: var(--status-critical);
   --color-status-idle: var(--status-idle);
 
+  --color-page: var(--page);
   --color-bg: var(--bg);
+  --color-map-ok: var(--map-ok);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-accent-soft: var(--accent-soft);
@@ -98,7 +156,7 @@
 }
 
 body {
-  background: var(--bg);
+  background: var(--page);
   color: var(--ink);
   font-family: var(--font-body), system-ui, sans-serif;
 }

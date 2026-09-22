@@ -242,8 +242,10 @@ export default function MapView({
               d={n.path}
               className="cuartel-cell cursor-pointer transition-opacity duration-100 hover:opacity-80"
               style={{
-                fill: `color-mix(in srgb, ${STATUS_COLOR[n.status]} 55%, var(--surface-2))`,
-                stroke: selected ? "var(--ink)" : "var(--surface)",
+                fill: n.status === "good" || n.status === "idle"
+                  ? "var(--map-ok)"
+                  : `color-mix(in srgb, ${STATUS_COLOR[n.status]} 85%, var(--bg))`,
+                stroke: selected ? "var(--ink)" : "var(--bg)",
                 strokeWidth: selected ? 3.5 : 2.5,
                 opacity: dimmed ? 0.22 : undefined,
               }}
@@ -268,7 +270,7 @@ export default function MapView({
         {shown.dots.map((d) => (
           <circle
             key={d.id} cx={d.x} cy={d.y} r={dotR} className="cursor-pointer"
-            style={{ fill: STATUS_COLOR[d.status], stroke: "var(--surface)", strokeWidth: 1.5 }}
+            style={{ fill: STATUS_COLOR[d.status], stroke: "var(--bg)", strokeWidth: 1.5 }}
             onClick={(ev) => {
               ev.stopPropagation();
               const n = nodes.find((x) => x.id === zoomedId);

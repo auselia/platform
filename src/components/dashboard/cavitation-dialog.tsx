@@ -144,7 +144,7 @@ export default function CavitationDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-stretch justify-center bg-forest/70 p-2 sm:p-5"
+      className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/60 p-2 sm:p-5"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
