@@ -49,8 +49,10 @@ export default function CavitationGrid({
           {filter === "flagged" ? t.cavNoneFlagged : scopedToRange ? t.cavNoneInRange : t.cavNone}
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2.5">
-          {items.map((c) => (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(172px,1fr))] gap-2.5">
+          {items.map((c) => {
+            const d = new Date(c.ts);
+            return (
             <button
               key={c.id}
               onClick={() => onSelect(c.id)}
@@ -59,11 +61,10 @@ export default function CavitationGrid({
                 c.id === selectedId ? "border-accent bg-surface-2" : "border-border hover:bg-surface-2"
               }`}
             >
-              <span className="flex items-center gap-1.5">
+              <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                 {c.flagged ? <FlagMark title={t.cavFlagged} /> : <span className="inline-block w-3" />}
-                <span className="font-mono text-[11px]">
-                  {new Date(c.ts).toLocaleString(locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                </span>
+                <span className="whitespace-nowrap font-mono text-[11px]">{d.toLocaleDateString(locale, { month: "short", day: "numeric" })}</span>
+                <span className="whitespace-nowrap font-mono text-[11px] text-ink2">{d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}</span>
               </span>
               <span className="text-ink2">{t[CLASS_KEY[c.cls]]}</span>
               <span className="flex justify-between font-mono text-ink2">
@@ -71,7 +72,8 @@ export default function CavitationGrid({
                 <span>{c.freq_khz !== null ? `${c.freq_khz} kHz` : "-"}</span>
               </span>
             </button>
-          ))}
+            );
+          })}
         </div>
       )}
       {hasMore && filter === "all" && (

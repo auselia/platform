@@ -84,7 +84,7 @@ export default function FocusShell({
       </div>
 
       <div className="flex flex-col gap-3.5 min-[1040px]:min-h-0">
-        <div className="rounded-xl border border-border bg-bg p-3.5 min-[1040px]:flex-[0_0_65%] min-[1040px]:min-h-0 min-[1040px]:overflow-y-auto">
+        <div className="rounded-xl border border-border bg-bg p-3.5 min-[1040px]:flex-[0_0_58%] min-[1040px]:min-h-0 min-[1040px]:overflow-y-auto">
           <div className="mb-3 flex items-center justify-between gap-2">
             <Segmented value={range} onChange={onRange} options={[
               { value: "day", label: t.rangeDay }, { value: "week", label: t.rangeWeek }, { value: "month", label: t.rangeMonth },
@@ -97,7 +97,7 @@ export default function FocusShell({
           </div>
           <DayPicker rows={rows} anchor={anchorMs} dayAnchor={dayAnchor} onDayAnchor={(d) => { onDayAnchor(d); onRange("day"); }} t={t} lang={lang} />
         </div>
-        <div className="min-h-[170px] rounded-xl border border-border bg-bg p-2 min-[1040px]:flex-[0_0_35%] min-[1040px]:min-h-0">
+        <div className="min-h-[200px] rounded-xl border border-border bg-bg p-2 min-[1040px]:flex-[0_0_42%] min-[1040px]:min-h-0">
           <MapPanel
             geo={geo} nodes={nodes} isLive={isLive} selectedId={selectedId} filters={filters} counts={counts} t={t}
             onToggleFilter={onToggleFilter} onSelect={onSelect} layoutFor={layoutFor} readingsFor={readingsFor}

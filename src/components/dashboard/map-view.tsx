@@ -244,7 +244,7 @@ export default function MapView({
             <path
               key={n.id}
               d={n.path}
-              className={`cuartel-cell transition-opacity duration-100 ${compact ? "" : "cursor-pointer hover:opacity-80"}`}
+              className="cuartel-cell cursor-pointer transition-opacity duration-100 hover:opacity-80"
               style={{
                 fill: n.status === "good" || n.status === "idle"
                   ? "var(--map-ok)"
@@ -255,11 +255,13 @@ export default function MapView({
               }}
               onMouseMove={compact ? undefined : (ev) => setTip({ ...rel(ev), node: n })}
               onMouseLeave={compact ? undefined : () => setTip(null)}
-              onClick={compact ? undefined : (ev) => {
+              onClick={(ev) => {
                 if (dragMoved.current) return;
                 ev.stopPropagation();
                 onSelect(n.id);
-                zoomTo(n);
+                // Compact is a fixed locator: select, but never zoom in (there is no room
+                // to show sensor dots there, and the enlarge popover is what zooming is for).
+                if (!compact) zoomTo(n);
               }}
             />
           );
