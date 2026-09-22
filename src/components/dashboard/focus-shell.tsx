@@ -66,10 +66,10 @@ export default function FocusShell({
   return (
     <div
       className="grid grid-cols-1 gap-[18px] min-[901px]:min-h-0 min-[901px]:flex-1 min-[901px]:overflow-y-auto
-      min-[1040px]:grid-cols-[minmax(210px,23%)_minmax(0,1fr)_minmax(230px,24%)] min-[1040px]:grid-rows-[minmax(0,1fr)] min-[1040px]:overflow-visible"
+      min-[1040px]:grid-cols-[minmax(210px,23%)_minmax(0,1fr)_minmax(230px,24%)] min-[1040px]:grid-rows-[auto_minmax(0,1fr)]"
       // TODO: tighten the 901-1039px and mobile stacked fallback for focus mode.
     >
-      <div className="col-span-full -mb-1.5 flex flex-none gap-0.5 border-b border-border">
+      <div className="col-span-full flex flex-none gap-0.5 border-b border-border">
         {tabs.map((x) => (
           <button
             key={x.id}
