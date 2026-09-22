@@ -6,10 +6,11 @@
 //      header, checked before our code runs. The ESP32 sends the project's
 //      PUBLISHABLE key here - safe to embed in firmware, same as it's safe
 //      in browser code.
-//   2. Device identity (our own): the X-Api-Key header, specific to one
-//      plant, hashed and looked up below. This is what actually says
-//      "which plant is this reading for" - the publishable key alone
-//      doesn't identify a device.
+//   2. Device identity (our own): the X-Api-Key header, hashed and looked up
+//      in plant_device_keys below. This is what actually says "which plant
+//      is this reading for" - the publishable key alone doesn't identify a
+//      device. A plant can have more than one key (e.g. Hope's ESP32 and its
+//      oscilloscope logger are two physical devices, one plant).
 //
 // authenticateDevice() takes ctx.supabaseAdmin (from withSupabase) so it
 // deliberately bypasses RLS - the X-Api-Key check IS the gate here.
@@ -35,13 +36,13 @@ export async function authenticateDevice(
 
   const hash = await sha256Hex(apiKey);
   const { data, error } = await supabase
-    .from("plants")
-    .select("id")
-    .eq("api_key_hash", hash)
+    .from("plant_device_keys")
+    .select("plant_id")
+    .eq("key_hash", hash)
     .maybeSingle();
 
   if (error || !data) return null;
-  return { plantId: data.id };
+  return { plantId: data.plant_id };
 }
 
 export function jsonResponse(body: unknown, status = 200): Response {
