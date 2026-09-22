@@ -19,7 +19,7 @@ import CavitationGrid from "./cavitation-grid";
 import CavitationDetails from "./cavitation-details";
 import CavitationDialog from "./cavitation-dialog";
 import type { PanelTab } from "./metrics-panel";
-import type { Layout, Readings } from "./map-view";
+import type { Layout } from "./map-view";
 
 // The 3-column layout that replaces the classic MapView+MetricsPanel grid once the
 // Environment or Cavitations tab is active: a range/day picker and a small locator map on
@@ -30,7 +30,7 @@ export default function FocusShell({
   sensors, panelSensor, onPanelSensor,
   dates, env, envVar, onEnvVar, range, onRange, loading,
   rows, anchorMs, dayAnchor, onDayAnchor, lastUpdated,
-  geo, nodes, selectedId, filters, counts, onToggleFilter, onSelect, layoutFor, readingsFor,
+  geo, nodes, selectedId, filters, counts, onToggleFilter, onSelect, layoutFor,
 }: {
   node: DNode; t: Strings; lang: Lang; isLive: boolean;
   tab: "env" | "cav"; onTab: (t: PanelTab) => void; canEditIrrigation: boolean;
@@ -42,7 +42,7 @@ export default function FocusShell({
   geo: Geo; nodes: DNode[]; selectedId: string | null;
   filters: Record<Severity, boolean>; counts: Record<Severity, number>;
   onToggleFilter: (s: Severity) => void; onSelect: (id: string) => void;
-  layoutFor: (n: DNode) => Layout; readingsFor: (n: DNode, d: SensorDot) => Readings;
+  layoutFor: (n: DNode) => Layout;
 }) {
   const locale = lang === "es" ? "es-CL" : undefined;
   const cav = useCavitationData(node.id, dayAnchor, range);
@@ -100,7 +100,7 @@ export default function FocusShell({
         <div className="min-h-[200px] rounded-xl border border-border bg-bg p-2 min-[1040px]:flex-[0_0_42%] min-[1040px]:min-h-0">
           <MapPanel
             geo={geo} nodes={nodes} isLive={isLive} selectedId={selectedId} filters={filters} counts={counts} t={t}
-            onToggleFilter={onToggleFilter} onSelect={onSelect} layoutFor={layoutFor} readingsFor={readingsFor}
+            onToggleFilter={onToggleFilter} onSelect={onSelect} layoutFor={layoutFor}
             onViewFullSensor={(id) => onPanelSensor(id)}
           />
         </div>
@@ -116,7 +116,8 @@ export default function FocusShell({
             <CavitationGrid
               items={cav.visible} summary={cav.summary} filter={cav.filter} onFilter={cav.setFilter}
               hasMore={cav.hasMore} onOlder={cav.older} scopedToRange={!!dayAnchor}
-              selectedId={cav.selectedId} onSelect={cav.setSelectedId} t={t} locale={locale}
+              selectedId={cav.selectedId} onSelect={cav.setSelectedId} onOpen={() => setDialogOpen(true)}
+              t={t} locale={locale}
             />
           )
         ) : (

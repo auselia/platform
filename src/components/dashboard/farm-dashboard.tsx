@@ -178,15 +178,6 @@ export default function FarmDashboard({
     [rows, range, anchor, dot?.jitter],
   );
 
-  const readingsFor = useCallback((_n: DNode, d: SensorDot) => {
-    const last = rows[rows.length - 1];
-    const v = (x: number | null | undefined) => (x === null || x === undefined ? null : x * d.jitter);
-    return {
-      moisture: v(last?.soil_pct), airtemp: v(last?.air_temp_c), humidity: v(last?.humidity_pct),
-      weight: last?.weight_g ? (last.weight_g / 1000) * d.jitter : null,
-    };
-  }, [rows]);
-
   const counts = { critical: 0, warning: 0, good: 0 } as Record<Severity, number>;
   nodes.forEach((n) => { if (n.status in counts) counts[n.status as Severity]++; });
 
@@ -321,7 +312,7 @@ export default function FarmDashboard({
             rows={rows} anchorMs={anchor} dayAnchor={dayAnchor} onDayAnchor={setDayAnchor} lastUpdated={lastUpdated}
             geo={geo} nodes={nodes} selectedId={selectedId} filters={filters} counts={counts}
             onToggleFilter={(s) => setFilters((f) => ({ ...f, [s]: !f[s] }))}
-            onSelect={selectNode} layoutFor={layoutFor} readingsFor={readingsFor}
+            onSelect={selectNode} layoutFor={layoutFor}
           />
         ) : (
           <div className="grid grid-cols-1 gap-[22px] min-[901px]:min-h-0 min-[901px]:flex-1 min-[901px]:grid-cols-[minmax(0,1.7fr)_minmax(280px,420px)] min-[901px]:grid-rows-[minmax(0,1fr)]">
@@ -330,7 +321,6 @@ export default function FarmDashboard({
               onToggleFilter={(s) => setFilters((f) => ({ ...f, [s]: !f[s] }))}
               onSelect={selectNode}
               layoutFor={layoutFor}
-              readingsFor={readingsFor}
               onViewFullSensor={(id) => { setPanelSensor(id); }}
             />
             {node && (
@@ -348,9 +338,11 @@ export default function FarmDashboard({
         )}
       </div>
 
-      <div className="mt-2.5 flex-none border-t border-border pt-4 text-[11.5px] text-ink2 min-[901px]:mt-2.5">
-        {isLive ? t.footNoteLive : t.footNoteDemo}
-      </div>
+      {!isLive && (
+        <div className="mt-2.5 flex-none border-t border-border pt-4 text-[11.5px] text-ink2 min-[901px]:mt-2.5">
+          {t.footNoteDemo}
+        </div>
+      )}
 
       {modal && (
         <div

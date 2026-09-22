@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 import type { Strings } from "@/lib/dashboard/i18n";
 import type { Geo } from "@/lib/dashboard/geo";
-import type { SensorDot } from "@/lib/dashboard/sim";
 import type { DNode, Severity } from "@/lib/dashboard/types";
-import MapView, { type Layout, type Readings } from "./map-view";
+import MapView, { type Layout } from "./map-view";
 
 // A small, read-only locator map for the focus-mode left column, with a button to open a
 // bigger, fully interactive map as a floating popover. Not the full-screen dialog pattern
@@ -22,10 +21,9 @@ export default function MapPanel(props: {
   onToggleFilter: (s: Severity) => void;
   onSelect: (id: string) => void;
   layoutFor: (n: DNode) => Layout;
-  readingsFor: (n: DNode, d: SensorDot) => Readings;
   onViewFullSensor: (dotId: string) => void;
 }) {
-  const { t, onSelect } = props;
+  const { t, onSelect, onViewFullSensor } = props;
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
@@ -62,7 +60,11 @@ export default function MapPanel(props: {
             >
               &times;
             </button>
-            <MapView {...props} onSelect={(id) => { onSelect(id); setExpanded(false); }} />
+            <MapView
+              {...props}
+              onSelect={(id) => { onSelect(id); setExpanded(false); }}
+              onViewFullSensor={(id) => { onViewFullSensor(id); setExpanded(false); }}
+            />
           </div>
         </div>
       )}

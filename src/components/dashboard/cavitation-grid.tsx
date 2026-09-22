@@ -6,18 +6,19 @@ import { CLASS_KEY } from "@/lib/dashboard/cavitation";
 import type { CavitationFilter } from "@/lib/dashboard/use-cavitation-data";
 import { FlagMark, Segmented, relTime } from "./ui";
 
-// Center column of focus mode for the Cavitations tab: browse many captures at a glance,
-// pick one to inspect in the right-column CavitationDetails, or dig deeper from there.
+// Center column of focus mode for the Cavitations tab: browse many captures at a glance.
+// A click picks one to inspect in the right-column CavitationDetails; a double-click skips
+// straight to the full analysis dialog for it, same shortcut people expect from a file grid.
 export default function CavitationGrid({
   items, summary, filter, onFilter, hasMore, onOlder, scopedToRange,
-  selectedId, onSelect, t, locale,
+  selectedId, onSelect, onOpen, t, locale,
 }: {
   items: Cavitation[]; summary: CavitationSummary | null;
   filter: CavitationFilter; onFilter: (f: CavitationFilter) => void;
   hasMore: boolean; onOlder: () => void;
   // true when a day/range is picked: "no captures" means none in that window, not ever.
   scopedToRange: boolean;
-  selectedId: number | null; onSelect: (id: number) => void;
+  selectedId: number | null; onSelect: (id: number) => void; onOpen: () => void;
   t: Strings; locale: string | undefined;
 }) {
   const tiles: [string, string][] = [
@@ -56,6 +57,7 @@ export default function CavitationGrid({
             <button
               key={c.id}
               onClick={() => onSelect(c.id)}
+              onDoubleClick={() => { onSelect(c.id); onOpen(); }}
               aria-current={c.id === selectedId}
               className={`flex flex-col gap-1.5 rounded-lg border px-3 py-2.5 text-left text-xs ${
                 c.id === selectedId ? "border-accent bg-surface-2" : "border-border hover:bg-surface-2"

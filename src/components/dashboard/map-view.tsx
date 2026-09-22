@@ -6,11 +6,10 @@ import type { Strings } from "@/lib/dashboard/i18n";
 import { bboxOfPoints, parsePathPoints, type Circuit, type Geo } from "@/lib/dashboard/geo";
 import type { SensorDot } from "@/lib/dashboard/sim";
 import type { DNode, Severity } from "@/lib/dashboard/types";
-import { StatusPill, statusLabel } from "./ui";
+import { statusLabel } from "./ui";
 
 type View = { x: number; y: number; w: number; h: number };
 export type Layout = { dots: SensorDot[]; circuits: Circuit[] };
-export type Readings = { moisture: number | null; airtemp: number | null; humidity: number | null; weight: number | null };
 
 const SEVERITIES: Severity[] = ["critical", "warning", "good"];
 const EMPTY: Layout = { dots: [], circuits: [] };
@@ -24,7 +23,7 @@ function niceScale(raw: number) {
 
 export default function MapView({
   geo, nodes, isLive, selectedId, filters, counts, t,
-  onToggleFilter, onSelect, layoutFor, readingsFor, onViewFullSensor, compact = false,
+  onToggleFilter, onSelect, layoutFor, onViewFullSensor, compact = false,
 }: {
   geo: Geo;
   nodes: DNode[];
@@ -36,7 +35,6 @@ export default function MapView({
   onToggleFilter: (s: Severity) => void;
   onSelect: (id: string) => void;
   layoutFor: (n: DNode) => Layout;
-  readingsFor: (n: DNode, d: SensorDot) => Readings;
   onViewFullSensor: (dotId: string) => void;
   // A smaller locator: click a cuartel to zoom in and click a sensor, same as the full
   // map, just without the filter chips, compass, scale bar and legend (no room for them).
@@ -53,26 +51,23 @@ export default function MapView({
   const [view, setViewState] = useState<View>(full);
   const [zoomedId, setZoomedId] = useState<string | null>(null);
   const [shown, setShown] = useState<Layout>(EMPTY);
-  const [popup, setPopup] = useState<{ x: number; y: number; dot: SensorDot; node: DNode } | null>(null);
   const [tip, setTip] = useState<{ x: number; y: number; node: DNode } | null>(null);
   const [panning, setPanning] = useState(false);
   const [wrapW, setWrapW] = useState(0);
-  const [wrapH, setWrapH] = useState(0);
 
   const setView = useCallback((v: View) => { viewRef.current = v; setViewState(v); }, []);
 
   useEffect(() => {
     if (animRef.current) cancelAnimationFrame(animRef.current);
-    setView(full); setZoomedId(null); setShown(EMPTY); setPopup(null); setTip(null);
+    setView(full); setZoomedId(null); setShown(EMPTY); setTip(null);
   }, [full, setView]);
 
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    const sync = () => { const r = el.getBoundingClientRect(); setWrapW(r.width); setWrapH(r.height); };
-    const ro = new ResizeObserver(sync);
+    const ro = new ResizeObserver(() => setWrapW(el.getBoundingClientRect().width));
     ro.observe(el);
-    sync();
+    setWrapW(el.getBoundingClientRect().width);
     return () => ro.disconnect();
   }, []);
 
@@ -101,7 +96,7 @@ export default function MapView({
   }, [setView]);
 
   const resetView = useCallback(() => {
-    setZoomedId(null); setShown(EMPTY); setPopup(null);
+    setZoomedId(null); setShown(EMPTY);
     animateTo(full);
   }, [animateTo, full]);
 
@@ -113,7 +108,7 @@ export default function MapView({
     const aspect = geo.width / geo.height;
     if (tw / th > aspect) th = tw / aspect; else tw = th * aspect;
     const cx = (bb.minx + bb.maxx) / 2, cy = (bb.miny + bb.maxy) / 2;
-    setZoomedId(n.id); setPopup(null); setShown(EMPTY);
+    setZoomedId(n.id); setShown(EMPTY);
     const layout = layoutFor(n);
     animateTo({ x: cx - tw / 2, y: cy - th / 2, w: tw, h: th }, () => setShown(layout));
   }, [animateTo, geo, layoutFor]);
@@ -124,7 +119,6 @@ export default function MapView({
     if (!wrap || !svg || compact) return;
     const onWheel = (ev: WheelEvent) => {
       ev.preventDefault();
-      setPopup(null);
       const v = viewRef.current;
       const rect = svg.getBoundingClientRect();
       const mx = (ev.clientX - rect.left) / rect.width, my = (ev.clientY - rect.top) / rect.height;
@@ -144,9 +138,8 @@ export default function MapView({
     const wrap = wrapRef.current;
     if (!wrap || compact) return;
     const down = (ev: MouseEvent) => {
-      if ((ev.target as Element).closest?.("[data-popup]")) return;
       dragging = true; dragMoved.current = false; lx = ev.clientX; ly = ev.clientY;
-      setPanning(true); setPopup(null);
+      setPanning(true);
     };
     const move = (ev: MouseEvent) => {
       if (!dragging) return;
@@ -280,9 +273,9 @@ export default function MapView({
             key={d.id} cx={d.x} cy={d.y} r={dotR} className="cursor-pointer"
             style={{ fill: STATUS_COLOR[d.status], stroke: "var(--bg)", strokeWidth: 1.5 }}
             onClick={(ev) => {
+              // Straight to that sensor's own chart and details, no in-between popup step.
               ev.stopPropagation();
-              const n = nodes.find((x) => x.id === zoomedId);
-              if (n) setPopup({ ...rel(ev), dot: d, node: n });
+              onViewFullSensor(d.id);
             }}
           />
         ))}
@@ -330,55 +323,6 @@ export default function MapView({
         </div>
       )}
 
-      {popup && (
-        <div
-          data-popup
-          className="absolute z-[6] min-w-40 rounded-[10px] border border-border bg-surface px-3 py-2.5 text-xs shadow-xl"
-          style={{
-            left: Math.min(popup.x + 12, Math.max(8, wrapW - 180)),
-            top: Math.min(Math.max(8, popup.y - 10), Math.max(8, wrapH - 190)),
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="mb-1.5 flex items-center justify-between gap-2 font-mono font-bold">
-            <span className="flex items-center gap-1.5">
-              {popup.dot.label}
-              <StatusPill status={popup.dot.status} t={t} />
-            </span>
-            <button onClick={() => setPopup(null)} className="px-0.5 text-sm leading-none text-ink2">&times;</button>
-          </div>
-          {!isLive && (
-            <PopRow k={t.circuit} v={String.fromCharCode(65 + popup.dot.circuitIdx)} />
-          )}
-          {(() => {
-            const r = readingsFor(popup.node, popup.dot);
-            const f = (v: number | null, d: number) => (v === null ? "-" : v.toFixed(d));
-            return (
-              <>
-                <PopRow k={t.moisture} v={`${f(r.moisture, 0)}%`} />
-                <PopRow k={t.airtemp} v={`${f(r.airtemp, 1)}°C`} />
-                <PopRow k={t.humidity} v={`${f(r.humidity, 0)}%`} />
-                <PopRow k={t.weight} v={`${f(r.weight, 2)}kg`} />
-              </>
-            );
-          })()}
-          <button
-            onClick={() => { onViewFullSensor(popup.dot.id); setPopup(null); }}
-            className="mt-2 block w-full border-t border-border pt-2 text-left text-[11.5px] font-semibold text-accent"
-          >
-            {t.viewFullSensor} →
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PopRow({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="flex justify-between gap-2.5 py-[3px] text-ink2">
-      <span>{k}</span>
-      <b className="font-mono text-ink">{v}</b>
     </div>
   );
 }
