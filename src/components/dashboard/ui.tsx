@@ -45,6 +45,17 @@ export function Segmented<T extends string>({
   );
 }
 
+// Amber is reserved for signal. A flagged capture is the strongest signal we have.
+export function FlagMark({ title }: { title: string }) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" role="img" aria-label={title} className="flex-none text-amber">
+      <title>{title}</title>
+      <circle cx="6" cy="6" r="3.2" fill="currentColor" />
+      <circle cx="6" cy="6" r="5.4" fill="none" stroke="currentColor" strokeWidth="1" opacity="0.55" />
+    </svg>
+  );
+}
+
 export function relTime(d: Date, t: Strings) {
   const s = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000));
   if (s < 60) return t.justNow;

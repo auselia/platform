@@ -9,8 +9,8 @@ import type { DNode, Severity } from "@/lib/dashboard/types";
 import { StatusPill, statusLabel } from "./ui";
 
 type View = { x: number; y: number; w: number; h: number };
-type Layout = { dots: SensorDot[]; circuits: Circuit[] };
-type Readings = { moisture: number | null; airtemp: number | null; humidity: number | null; weight: number | null };
+export type Layout = { dots: SensorDot[]; circuits: Circuit[] };
+export type Readings = { moisture: number | null; airtemp: number | null; humidity: number | null; weight: number | null };
 
 const SEVERITIES: Severity[] = ["critical", "warning", "good"];
 const EMPTY: Layout = { dots: [], circuits: [] };
@@ -24,7 +24,7 @@ function niceScale(raw: number) {
 
 export default function MapView({
   geo, nodes, isLive, selectedId, filters, counts, t,
-  onToggleFilter, onSelect, layoutFor, readingsFor, onViewFullSensor,
+  onToggleFilter, onSelect, layoutFor, readingsFor, onViewFullSensor, compact = false,
 }: {
   geo: Geo;
   nodes: DNode[];
@@ -38,6 +38,8 @@ export default function MapView({
   layoutFor: (n: DNode) => Layout;
   readingsFor: (n: DNode, d: SensorDot) => Readings;
   onViewFullSensor: (dotId: string) => void;
+  // Read-only locator: no filters, zoom, pan, hover or popups. Always the full farm view.
+  compact?: boolean;
 }) {
   const full = useMemo<View>(() => ({ x: 0, y: 0, w: geo.width, h: geo.height }), [geo]);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -115,7 +117,7 @@ export default function MapView({
   // wheel zoom (needs a non-passive listener to preventDefault)
   useEffect(() => {
     const wrap = wrapRef.current, svg = svgRef.current;
-    if (!wrap || !svg) return;
+    if (!wrap || !svg || compact) return;
     const onWheel = (ev: WheelEvent) => {
       ev.preventDefault();
       setPopup(null);
@@ -130,13 +132,13 @@ export default function MapView({
     };
     wrap.addEventListener("wheel", onWheel, { passive: false });
     return () => wrap.removeEventListener("wheel", onWheel);
-  }, [full, clamp, setView]);
+  }, [full, clamp, setView, compact]);
 
   // drag to pan
   useEffect(() => {
     let dragging = false, lx = 0, ly = 0;
     const wrap = wrapRef.current;
-    if (!wrap) return;
+    if (!wrap || compact) return;
     const down = (ev: MouseEvent) => {
       if ((ev.target as Element).closest?.("[data-popup]")) return;
       dragging = true; dragMoved.current = false; lx = ev.clientX; ly = ev.clientY;
@@ -166,7 +168,7 @@ export default function MapView({
       window.removeEventListener("mousemove", move);
       window.removeEventListener("mouseup", up);
     };
-  }, [clamp, setView]);
+  }, [clamp, setView, compact]);
 
   const rel = (ev: React.MouseEvent) => {
     const r = wrapRef.current!.getBoundingClientRect();
@@ -175,7 +177,7 @@ export default function MapView({
 
   const dotR = Math.max(3, view.w * 0.012);
   const lineW = Math.max(1.2, view.w * 0.0028);
-  const showReset = !!zoomedId || view.w < full.w * 0.985;
+  const showReset = !compact && (!!zoomedId || view.w < full.w * 0.985);
   const metersPerPx = wrapW ? view.w / wrapW : 1;
   const niceM = niceScale(110 * metersPerPx);
   const barPx = niceM / metersPerPx;
@@ -186,9 +188,11 @@ export default function MapView({
   return (
     <div
       ref={wrapRef}
-      className={`relative overflow-hidden rounded-xl border border-border bg-bg min-[901px]:h-full ${panning ? "cursor-grabbing" : "cursor-grab"}`}
+      className={`relative overflow-hidden rounded-xl border border-border bg-bg min-[901px]:h-full ${
+        compact ? "cursor-default" : panning ? "cursor-grabbing" : "cursor-grab"
+      }`}
     >
-      {!isLive && (
+      {!isLive && !compact && (
         <div className="absolute left-2.5 top-2.5 z-[4] flex max-w-[calc(100%-90px)] flex-wrap gap-1.5">
           {SEVERITIES.map((s) => (
             <button
@@ -220,7 +224,7 @@ export default function MapView({
         viewBox={`${view.x.toFixed(2)} ${view.y.toFixed(2)} ${view.w.toFixed(2)} ${view.h.toFixed(2)}`}
         className="block h-auto w-full min-[901px]:h-full"
         onClick={(e) => {
-          if (dragMoved.current) return;
+          if (compact || dragMoved.current) return;
           if ((e.target as Element).closest?.(".cuartel-cell")) return;
           resetView();
         }}
@@ -240,7 +244,7 @@ export default function MapView({
             <path
               key={n.id}
               d={n.path}
-              className="cuartel-cell cursor-pointer transition-opacity duration-100 hover:opacity-80"
+              className={`cuartel-cell transition-opacity duration-100 ${compact ? "" : "cursor-pointer hover:opacity-80"}`}
               style={{
                 fill: n.status === "good" || n.status === "idle"
                   ? "var(--map-ok)"
@@ -249,9 +253,9 @@ export default function MapView({
                 strokeWidth: selected ? 3.5 : 2.5,
                 opacity: dimmed ? 0.22 : undefined,
               }}
-              onMouseMove={(ev) => setTip({ ...rel(ev), node: n })}
-              onMouseLeave={() => setTip(null)}
-              onClick={(ev) => {
+              onMouseMove={compact ? undefined : (ev) => setTip({ ...rel(ev), node: n })}
+              onMouseLeave={compact ? undefined : () => setTip(null)}
+              onClick={compact ? undefined : (ev) => {
                 if (dragMoved.current) return;
                 ev.stopPropagation();
                 onSelect(n.id);
@@ -280,7 +284,7 @@ export default function MapView({
         ))}
       </svg>
 
-      {tip && (
+      {tip && !compact && (
         <div
           className="pointer-events-none absolute z-[5] whitespace-nowrap rounded-lg border border-border bg-surface px-2.5 py-[7px] text-xs shadow-lg"
           style={{ left: tip.x + 14, top: tip.y - 10 }}
@@ -294,7 +298,7 @@ export default function MapView({
         </div>
       )}
 
-      {!isLive && (
+      {!isLive && !compact && (
         <>
           <div className="pointer-events-none absolute right-3.5 top-3 z-[4] flex flex-col items-center font-mono text-[11px] font-bold text-ink2">
             <svg width="18" height="26" viewBox="0 0 18 26"><path d="M9,0 L16,20 L9,15 L2,20 Z" fill="currentColor" /></svg>
@@ -312,15 +316,17 @@ export default function MapView({
         </>
       )}
 
-      <div
-        className={`pointer-events-none absolute bottom-2.5 right-3.5 z-[4] rounded-lg border border-border bg-surface px-[9px] py-1 text-[10.5px] font-semibold text-ink2 transition-opacity duration-150 ${
-          zoomedId && !isLive ? "opacity-100" : "opacity-0"
-        }`}
-      >
-        {t.circuitLegend}
-      </div>
+      {!compact && (
+        <div
+          className={`pointer-events-none absolute bottom-2.5 right-3.5 z-[4] rounded-lg border border-border bg-surface px-[9px] py-1 text-[10.5px] font-semibold text-ink2 transition-opacity duration-150 ${
+            zoomedId && !isLive ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          {t.circuitLegend}
+        </div>
+      )}
 
-      {popup && (
+      {popup && !compact && (
         <div
           data-popup
           className="absolute z-[6] min-w-40 rounded-[10px] border border-border bg-surface px-3 py-2.5 text-xs shadow-xl"

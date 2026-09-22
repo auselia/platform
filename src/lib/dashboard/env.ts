@@ -31,6 +31,12 @@ export const ENV_KEYS: {
   { key: "light", fmt: (v) => v.toFixed(0), never: true },
 ];
 
+// The bucket a reading's timestamp falls into for week/month averaging, and the key
+// DayPicker uses to mark a calendar day as having data. Local calendar day, not UTC.
+export function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
 function value(r: Reading, k: LiveKey): number | null {
   const v = r[FIELD[k]];
   if (v === null || v === undefined || Number.isNaN(v)) return null;
@@ -55,7 +61,7 @@ export function buildEnv(rows: Reading[], range: Range, anchor: number, jitter =
   const buckets = new Map<string, { date: Date; sums: Record<string, number>; counts: Record<string, number> }>();
   windowed.forEach((r) => {
     const d = new Date(r.ts);
-    const key = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+    const key = dayKey(d);
     let b = buckets.get(key);
     if (!b) {
       b = { date: new Date(d.getFullYear(), d.getMonth(), d.getDate()), sums: {}, counts: {} };

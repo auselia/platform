@@ -15,6 +15,7 @@ import ThemeToggle from "@/components/theme-toggle";
 import Wordmark from "@/components/wordmark";
 import MapView from "./map-view";
 import MetricsPanel, { type PanelTab } from "./metrics-panel";
+import FocusShell from "./focus-shell";
 import type { IrrigationPayload } from "./irrigation-block";
 import { relTime, statusLabel } from "./ui";
 
@@ -61,6 +62,7 @@ export default function FarmDashboard({
   const [range, setRange] = useState<Range>("day");
   const [envVar, setEnvVar] = useState<EnvKey>("moisture");
   const [tab, setTab] = useState<PanelTab>("env");
+  const [dayAnchor, setDayAnchor] = useState<Date | null>(null);
   const [panelSensor, setPanelSensor] = useState<string | null>(null);
   const [filters, setFilters] = useState<Record<Severity, boolean>>({ critical: true, warning: true, good: true });
   const [extraSensors, setExtraSensors] = useState<Record<string, number>>({});
@@ -96,7 +98,7 @@ export default function FarmDashboard({
   useEffect(() => {
     let cancelled = false;
     setPlantsLoaded(false); setPlants([]); setIngest({}); setRows([]); setRowsLoaded(false);
-    setSelectedId(null); setPanelSensor(null); setEnvVar("moisture"); setTab(isDemo ? "ae" : "env");
+    setSelectedId(null); setPanelSensor(null); setEnvVar("moisture"); setTab(isDemo ? "ae" : "env"); setDayAnchor(null);
     loadOrg(orgId).then(({ list, map }) => {
       if (cancelled || !list.length) return;
       // demo opens on the most stressed plot, like the original dashboard
@@ -170,7 +172,7 @@ export default function FarmDashboard({
   const sensors = node ? layoutFor(node).dots : [];
   const dot = panelSensor ? sensors.find((s) => s.id === panelSensor) : undefined;
 
-  const anchor = isDemo && rows.length ? new Date(rows[rows.length - 1].ts).getTime() : now;
+  const anchor = dayAnchor ? dayAnchor.getTime() : isDemo && rows.length ? new Date(rows[rows.length - 1].ts).getTime() : now;
   const { dates, env } = useMemo(
     () => buildEnv(rows, range, anchor, dot?.jitter ?? 1),
     [rows, range, anchor, dot?.jitter],
@@ -189,7 +191,7 @@ export default function FarmDashboard({
   nodes.forEach((n) => { if (n.status in counts) counts[n.status as Severity]++; });
 
   const selectNode = (id: string) => {
-    setSelectedId(id); setEnvVar("moisture"); setPanelSensor(null); setTab(isDemo ? "ae" : "env");
+    setSelectedId(id); setEnvVar("moisture"); setPanelSensor(null); setTab(isDemo ? "ae" : "env"); setDayAnchor(null);
   };
 
   async function saveIrrigation(p: IrrigationPayload) {
@@ -202,6 +204,8 @@ export default function FarmDashboard({
     setIrrigation(data as IrrigationConfig);
     return true;
   }
+
+  const lastUpdated = rows.length ? relTime(new Date(rows[rows.length - 1].ts), t) : null;
 
   let summary = "";
   if (isLive) {
@@ -302,6 +306,19 @@ export default function FarmDashboard({
 
         {plantsLoaded && !nodes.length ? (
           <p className="py-16 text-center text-sm text-ink2">{t.noPlants}</p>
+        ) : (tab === "env" || tab === "cav") && node ? (
+          <FocusShell
+            key={node.id}
+            node={node} t={t} lang={lang} isLive={isLive} tab={tab} onTab={setTab}
+            canEditIrrigation={isLive && !!userEmail}
+            sensors={sensors} panelSensor={panelSensor} onPanelSensor={setPanelSensor}
+            dates={dates} env={env} envVar={envVar} onEnvVar={setEnvVar}
+            range={range} onRange={setRange} loading={!rowsLoaded}
+            rows={rows} anchorMs={anchor} dayAnchor={dayAnchor} onDayAnchor={setDayAnchor} lastUpdated={lastUpdated}
+            geo={geo} nodes={nodes} selectedId={selectedId} filters={filters} counts={counts}
+            onToggleFilter={(s) => setFilters((f) => ({ ...f, [s]: !f[s] }))}
+            onSelect={selectNode} layoutFor={layoutFor} readingsFor={readingsFor}
+          />
         ) : (
           <div className="grid grid-cols-1 gap-[22px] min-[901px]:min-h-0 min-[901px]:flex-1 min-[901px]:grid-cols-[minmax(0,1.7fr)_minmax(280px,420px)] min-[901px]:grid-rows-[minmax(0,1fr)]">
             <MapView
