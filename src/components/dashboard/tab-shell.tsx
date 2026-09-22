@@ -60,16 +60,22 @@ export default function TabShell({
 
   // Off by default for everyone. Live persists the choice in localStorage, same as theme/lang.
   // The demo persists it too, but only for the session (sessionStorage) - it should reset
-  // once the visitor leaves, not linger like a real account's preference would. Re-reads on
-  // isLive changing (not just on mount) so switching orgs can't leak one org type's stored
-  // value into the other's display.
-  const [advanced, setAdvanced] = useState(false);
-  useEffect(() => {
+  // once the visitor leaves, not linger like a real account's preference would.
+  //
+  // Read lazily (inside useState's initializer, not an effect) so a TabShell that remounts -
+  // which happens on every org switch, since farm-dashboard.tsx briefly nulls `node` while it
+  // loads the new org's plants - picks up the stored value on its very first render instead of
+  // flashing "off" for a frame while an effect catches up. The effect below stays as a second
+  // path for the (rarer) case where isLive itself changes without a remount.
+  const readAdvanced = () => {
     if (isLive) {
-      try { setAdvanced(localStorage.getItem("auselia-cav-advanced") === "1"); } catch { setAdvanced(false); }
-    } else {
-      setAdvanced(demoStorageGet<boolean>("advanced") ?? false);
+      try { return localStorage.getItem("auselia-cav-advanced") === "1"; } catch { return false; }
     }
+    return demoStorageGet<boolean>("advanced") ?? false;
+  };
+  const [advanced, setAdvanced] = useState(readAdvanced);
+  useEffect(() => {
+    setAdvanced(readAdvanced());
   }, [isLive]);
   const setAdvancedPersist = (v: boolean) => {
     setAdvanced(v);
@@ -147,16 +153,25 @@ export default function TabShell({
             <button onClick={() => onTab("general")} className="text-xs font-semibold text-accent">
               &larr; {t.backToGeneral}
             </button>
-            <select
-              aria-label={t.switchPlantAria}
-              value={selectedId ?? ""}
-              onChange={(e) => onSelect(e.target.value)}
-              className="rounded-lg border border-border bg-surface px-2 py-1 text-xs font-semibold text-ink"
-            >
-              {nodes.map((n) => (
-                <option key={n.id} value={n.id}>{n.label}</option>
-              ))}
-            </select>
+            <span className="relative inline-flex items-center">
+              <select
+                aria-label={t.switchPlantAria}
+                value={selectedId ?? ""}
+                onChange={(e) => onSelect(e.target.value)}
+                className="appearance-none rounded-lg border border-border bg-surface px-2 py-1 pr-6 text-xs font-semibold text-ink"
+              >
+                {nodes.map((n) => (
+                  <option key={n.id} value={n.id}>{n.label}</option>
+                ))}
+              </select>
+              <svg
+                width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                strokeLinecap="round" strokeLinejoin="round"
+                className="pointer-events-none absolute right-2 text-ink2"
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </span>
           </div>
         )}
       </div>
