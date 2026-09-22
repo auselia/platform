@@ -6,10 +6,10 @@
 export type Lang = "en" | "es";
 
 const en = {
-  navContact: "Contact us",
+  ctaContact: "Contact us",
   navPartnerSignIn: "Partner sign in",
 
-  heroKicker: "Edge-AI silicon that listens to plants",
+  heroKicker: "Silicon that listens to plants",
   heroTitle: "Auselia is listening...",
   heroBodyPre:
     "A field node that hears the quiet acoustic signs of drought stress in a plant's xylem, long before it shows by looking. We're still early. Right now it's listening to one plant, named ",
@@ -36,8 +36,12 @@ const en = {
   contactSentBody: "Thanks for reaching out. We'll get back to you soon.",
   backHome: "Back to home",
 
+  contactConfirmSubject: "We received your message",
+  contactConfirmBody:
+    "Thanks for reaching out to Auselia. We've received your message and will get back to you as soon as possible.",
+
   metaHomeTitle: "Auselia",
-  metaHomeDescription: "Edge-AI silicon that listens to plants.",
+  metaHomeDescription: "Silicon that listens to plants.",
   metaContactTitle: "Contact - Auselia",
   metaContactDescription: "Get in touch with the Auselia team.",
   metaPrivacyTitle: "Privacy Policy - Auselia",
@@ -47,10 +51,10 @@ const en = {
 };
 
 const es: typeof en = {
-  navContact: "Contáctanos",
+  ctaContact: "Contáctanos",
   navPartnerSignIn: "Acceso de socios",
 
-  heroKicker: "Silicio de IA de borde que escucha a las plantas",
+  heroKicker: "Silicio que escucha a las plantas",
   heroTitle: "Auselia está escuchando...",
   heroBodyPre:
     "Un nodo de campo que escucha las señales acústicas silenciosas del estrés hídrico en el xilema de una planta, mucho antes de que se note a simple vista. Aún estamos empezando. Por ahora, escucha a una sola planta, llamada ",
@@ -77,8 +81,12 @@ const es: typeof en = {
   contactSentBody: "Gracias por contactarnos. Te responderemos pronto.",
   backHome: "Volver al inicio",
 
+  contactConfirmSubject: "Recibimos tu mensaje",
+  contactConfirmBody:
+    "Gracias por contactar a Auselia. Hemos recibido tu mensaje y te responderemos lo antes posible.",
+
   metaHomeTitle: "Auselia",
-  metaHomeDescription: "Silicio de IA de borde que escucha a las plantas.",
+  metaHomeDescription: "Silicio que escucha a las plantas.",
   metaContactTitle: "Contacto - Auselia",
   metaContactDescription: "Ponte en contacto con el equipo de Auselia.",
   metaPrivacyTitle: "Política de Privacidad - Auselia",

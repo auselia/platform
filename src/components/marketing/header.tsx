@@ -12,9 +12,6 @@ export default function MarketingHeader({ lang }: { lang: Lang }) {
         <Wordmark size={28} />
       </Link>
       <div className="flex flex-wrap items-center gap-3">
-        <Link href="/contact" className="text-xs font-mono uppercase tracking-wide text-ink2">
-          {t.navContact}
-        </Link>
         <LanguageSwitcher lang={lang} />
         <ThemeToggle />
         <Link

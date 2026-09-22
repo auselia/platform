@@ -20,7 +20,7 @@ export default async function Home() {
       <MarketingHeader lang={lang} />
 
       <main className="relative z-10 flex flex-1 flex-col">
-        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-start px-6 pb-12 pt-10 sm:pt-24">
+        <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-start px-6 pb-12 pt-4 sm:pt-10">
           <span className="font-mono text-xs uppercase tracking-[0.18em] text-ink2">
             {t.heroKicker}
           </span>
@@ -41,10 +41,10 @@ export default async function Home() {
               {t.ctaDemo}
             </Link>
             <Link
-              href="/login"
+              href="/contact"
               className="rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-ink"
             >
-              {t.navPartnerSignIn}
+              {t.ctaContact}
             </Link>
           </div>
 
