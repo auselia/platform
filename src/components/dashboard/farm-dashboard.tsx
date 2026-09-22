@@ -191,7 +191,12 @@ export default function FarmDashboard({
   nodes.forEach((n) => { if (n.status in counts) counts[n.status as Severity]++; });
 
   const selectNode = (id: string) => {
-    setSelectedId(id); setEnvVar("moisture"); setPanelSensor(null); setTab(isDemo ? "ae" : "env"); setDayAnchor(null);
+    // Re-selecting the plant already open (e.g. clicking it again on the compact map just
+    // to zoom in) changes nothing here; only MapView's own local zoom needs to happen. A
+    // real switch resets the per-plant state, but keeps whatever tab you were on: the tab
+    // set is the same for every plant in one org, so there is nothing to reset it for.
+    if (id === selectedId) return;
+    setSelectedId(id); setEnvVar("moisture"); setPanelSensor(null); setDayAnchor(null);
   };
 
   async function saveIrrigation(p: IrrigationPayload) {
@@ -308,7 +313,6 @@ export default function FarmDashboard({
           <p className="py-16 text-center text-sm text-ink2">{t.noPlants}</p>
         ) : (tab === "env" || tab === "cav") && node ? (
           <FocusShell
-            key={node.id}
             node={node} t={t} lang={lang} isLive={isLive} tab={tab} onTab={setTab}
             canEditIrrigation={isLive && !!userEmail}
             sensors={sensors} panelSensor={panelSensor} onPanelSensor={setPanelSensor}

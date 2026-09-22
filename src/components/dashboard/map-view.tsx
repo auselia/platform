@@ -38,7 +38,9 @@ export default function MapView({
   layoutFor: (n: DNode) => Layout;
   readingsFor: (n: DNode, d: SensorDot) => Readings;
   onViewFullSensor: (dotId: string) => void;
-  // Read-only locator: no filters, zoom, pan, hover or popups. Always the full farm view.
+  // A smaller locator: click a cuartel to zoom in and click a sensor, same as the full
+  // map, just without the filter chips, compass, scale bar and legend (no room for them).
+  // Wheel zoom and drag-to-pan stay off; the enlarge popover is for that kind of browsing.
   compact?: boolean;
 }) {
   const full = useMemo<View>(() => ({ x: 0, y: 0, w: geo.width, h: geo.height }), [geo]);
@@ -55,6 +57,7 @@ export default function MapView({
   const [tip, setTip] = useState<{ x: number; y: number; node: DNode } | null>(null);
   const [panning, setPanning] = useState(false);
   const [wrapW, setWrapW] = useState(0);
+  const [wrapH, setWrapH] = useState(0);
 
   const setView = useCallback((v: View) => { viewRef.current = v; setViewState(v); }, []);
 
@@ -66,9 +69,10 @@ export default function MapView({
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setWrapW(el.getBoundingClientRect().width));
+    const sync = () => { const r = el.getBoundingClientRect(); setWrapW(r.width); setWrapH(r.height); };
+    const ro = new ResizeObserver(sync);
     ro.observe(el);
-    setWrapW(el.getBoundingClientRect().width);
+    sync();
     return () => ro.disconnect();
   }, []);
 
@@ -177,7 +181,7 @@ export default function MapView({
 
   const dotR = Math.max(3, view.w * 0.012);
   const lineW = Math.max(1.2, view.w * 0.0028);
-  const showReset = !compact && (!!zoomedId || view.w < full.w * 0.985);
+  const showReset = !!zoomedId || view.w < full.w * 0.985;
   const metersPerPx = wrapW ? view.w / wrapW : 1;
   const niceM = niceScale(110 * metersPerPx);
   const barPx = niceM / metersPerPx;
@@ -224,7 +228,7 @@ export default function MapView({
         viewBox={`${view.x.toFixed(2)} ${view.y.toFixed(2)} ${view.w.toFixed(2)} ${view.h.toFixed(2)}`}
         className="block h-auto w-full min-[901px]:h-full"
         onClick={(e) => {
-          if (compact || dragMoved.current) return;
+          if (dragMoved.current) return;
           if ((e.target as Element).closest?.(".cuartel-cell")) return;
           resetView();
         }}
@@ -259,9 +263,7 @@ export default function MapView({
                 if (dragMoved.current) return;
                 ev.stopPropagation();
                 onSelect(n.id);
-                // Compact is a fixed locator: select, but never zoom in (there is no room
-                // to show sensor dots there, and the enlarge popover is what zooming is for).
-                if (!compact) zoomTo(n);
+                zoomTo(n);
               }}
             />
           );
@@ -328,13 +330,13 @@ export default function MapView({
         </div>
       )}
 
-      {popup && !compact && (
+      {popup && (
         <div
           data-popup
           className="absolute z-[6] min-w-40 rounded-[10px] border border-border bg-surface px-3 py-2.5 text-xs shadow-xl"
           style={{
             left: Math.min(popup.x + 12, Math.max(8, wrapW - 180)),
-            top: Math.max(8, popup.y - 10),
+            top: Math.min(Math.max(8, popup.y - 10), Math.max(8, wrapH - 190)),
           }}
           onClick={(e) => e.stopPropagation()}
         >
