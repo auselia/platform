@@ -87,11 +87,12 @@
   --border: rgba(236, 238, 234, 0.11);
 }
 
-/* The landing hero keeps the original bone/forest brand surface: it is a
-   moment, not a workspace, and it is the one place the full brand color
-   is the point. Only the actual dashboard (below) moved to graphite and
-   white. Same variable names, redefined inside this scope, so shared
-   pieces like the theme toggle and the plant mark pick them up too. */
+/* The public marketing pages and the auth flow (login/signup/password reset)
+   keep the original bone/forest brand surface: they are a moment, not a
+   workspace, and it is the one place the full brand color is the point.
+   Only the actual dashboard (below) moved to graphite and white. Same
+   variable names, redefined inside this scope, so shared pieces like the
+   theme toggle and the plant mark pick them up too. */
 .brand-surface {
   --page: #f4f1ea;
   --bg: #f4f1ea;

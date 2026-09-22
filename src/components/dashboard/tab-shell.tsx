@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { IrrigationConfig, Reading } from "@/lib/types";
 import type { Lang, Strings } from "@/lib/dashboard/i18n";
 import type { EnvKey, EnvSeries, Range } from "@/lib/dashboard/env";
@@ -57,12 +57,26 @@ export default function TabShell({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [section, setSection] = useState<SettingsSection>("general");
 
+  // Off by default for everyone, including the demo: the full FFT/raw-parameter view is
+  // opt-in, and only a signed-in partner has a Settings tab to opt in from (see
+  // settings-oscilloscope.tsx). A demo visitor always sees the simplified view.
+  const [advanced, setAdvanced] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("auselia-cav-advanced") === "1") setAdvanced(true);
+    } catch {}
+  }, []);
+  const setAdvancedPersist = (v: boolean) => {
+    setAdvanced(v);
+    try { localStorage.setItem("auselia-cav-advanced", v ? "1" : "0"); } catch {}
+  };
+
   const isSettings = tab === "settings";
   const hasPicker = tab === "env" || tab === "cav";
 
   const tabs: { id: PanelTab; label: string }[] = isLive
     ? [{ id: "env", label: t.tabEnv }, { id: "cav", label: t.tabCav }, { id: "settings", label: t.tabSettings }]
-    : [{ id: "ae", label: t.tabAe }, { id: "env", label: t.tabEnv }, { id: "events", label: t.tabEvents }];
+    : [{ id: "ae", label: t.tabAe }, { id: "env", label: t.tabEnv }, { id: "cav", label: t.tabCav }, { id: "events", label: t.tabEvents }];
 
   const settingsSections: { id: SettingsSection; label: string }[] = [
     { id: "general", label: t.settingsGeneral },
@@ -153,7 +167,7 @@ export default function TabShell({
               items={cav.visible} summary={cav.summary} filter={cav.filter} onFilter={cav.setFilter}
               hasMore={cav.hasMore} onOlder={cav.older} scopedToRange={!!dayAnchor}
               selectedId={cav.selectedId} onSelect={cav.setSelectedId} onOpen={() => setDialogOpen(true)}
-              t={t} locale={locale}
+              t={t} locale={locale} advanced={advanced}
             />
           )
         ) : tab === "ae" ? (
@@ -164,7 +178,10 @@ export default function TabShell({
           section === "irrigation" ? (
             <IrrigationBlock config={irrigation} t={t} onSave={onSaveIrrigation} />
           ) : section === "oscilloscope" ? (
-            <SettingsOscilloscope summary={cav.summary} loaded={cav.loaded} t={t} />
+            <SettingsOscilloscope
+              summary={cav.summary} loaded={cav.loaded} t={t}
+              advanced={advanced} onAdvanced={setAdvancedPersist}
+            />
           ) : (
             <SettingsGeneral node={node} orgName={orgName} t={t} />
           )
@@ -189,7 +206,7 @@ export default function TabShell({
           {tab === "cav" ? (
             <CavitationDetails
               c={cav.selected} y={cav.selected ? cav.traces[cav.selected.id] : undefined} t={t} locale={locale}
-              canFlag={canEditIrrigation} onFlag={cav.saveFlag} onOpen={() => setDialogOpen(true)}
+              canFlag={canEditIrrigation} onFlag={cav.saveFlag} onOpen={() => setDialogOpen(true)} advanced={advanced}
             />
           ) : tab === "ae" || tab === "events" ? (
             <CuartelHeader node={node} lastUpdated={lastUpdated} t={t} />
@@ -245,7 +262,7 @@ export default function TabShell({
         </div>
       )}
 
-      {dialogOpen && cav.selected && (
+      {dialogOpen && cav.selected && advanced && (
         <CavitationDialog
           supabase={cav.supabase} list={cav.visible} index={Math.max(0, cav.visible.findIndex((x) => x.id === cav.selected!.id))}
           t={t} lang={lang} canFlag={canEditIrrigation}

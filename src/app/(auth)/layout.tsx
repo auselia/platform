@@ -1,15 +1,19 @@
-import Link from "next/link";
-import Wordmark from "@/components/wordmark";
+import MarketingHeader from "@/components/marketing/header";
+import MarketingFooter from "@/components/marketing/footer";
+import { getLocale } from "@/lib/marketing/locale";
 
-export default function AuthLayout({ children }: { children: React.ReactNode }) {
+export default async function AuthLayout({ children }: { children: React.ReactNode }) {
+  const lang = await getLocale();
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-forest px-4 py-12">
-      <div className="w-full max-w-sm">
-        <Link href="/" className="mb-8 flex justify-center">
-          <Wordmark size={34} tone="onDark" />
-        </Link>
-        <div className="rounded-2xl border border-bone/10 bg-canopy p-8">{children}</div>
-      </div>
-    </main>
+    <div className="brand-surface flex min-h-dvh flex-col overflow-x-hidden bg-bg text-ink">
+      <MarketingHeader lang={lang} showPartnerLink={false} />
+
+      <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-8">
+        <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-8">{children}</div>
+      </main>
+
+      <MarketingFooter lang={lang} />
+    </div>
   );
 }

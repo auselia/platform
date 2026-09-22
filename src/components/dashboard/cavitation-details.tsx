@@ -9,23 +9,28 @@ import { CLASS_KEY, nearestIndex, niceLimit, traceMv, traceTime } from "@/lib/da
 // metrics, and flag/note form. A port of the classic Cavitations tab's Viewer/Trace,
 // narrowed for the right column (2-column metric grid instead of 3).
 export default function CavitationDetails({
-  c, y, t, locale, canFlag, onFlag, onOpen,
+  c, y, t, locale, canFlag, onFlag, onOpen, advanced,
 }: {
   c: Cavitation | null; y: number[] | undefined; t: Strings; locale: string | undefined;
   canFlag: boolean;
   onFlag: (c: Cavitation, flagged: boolean, note: string) => Promise<boolean>;
   onOpen: () => void;
+  // Off by default: hides the raw metrics grid and the full-analysis dialog
+  // shortcut, keeping the waveform trace and flag/note controls. See
+  // settings-oscilloscope.tsx.
+  advanced: boolean;
 }) {
   if (!c) return <div className="text-xs text-ink2">{t.cavSelect}</div>;
-  return <Viewer c={c} y={y} t={t} locale={locale} canFlag={canFlag} onFlag={onFlag} onOpen={onOpen} />;
+  return <Viewer c={c} y={y} t={t} locale={locale} canFlag={canFlag} onFlag={onFlag} onOpen={onOpen} advanced={advanced} />;
 }
 
 function Viewer({
-  c, y, t, locale, canFlag, onFlag, onOpen,
+  c, y, t, locale, canFlag, onFlag, onOpen, advanced,
 }: {
   c: Cavitation; y: number[] | undefined; t: Strings; locale: string | undefined; canFlag: boolean;
   onFlag: (c: Cavitation, flagged: boolean, note: string) => Promise<boolean>;
   onOpen: () => void;
+  advanced: boolean;
 }) {
   const [note, setNote] = useState(c.flag_note);
   const [busy, setBusy] = useState(false);
@@ -62,22 +67,27 @@ function Viewer({
       </div>
 
       <Trace c={c} y={y} t={t} />
-      <button
-        onClick={onOpen}
-        className="self-start rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2"
-      >
-        {t.cavOpen}
-      </button>
 
-      <div className="grid grid-cols-2 gap-1.5">
-        {metrics.map(([k, v]) => (
-          <div key={k} className="rounded-lg border border-border px-2.5 py-1.5">
-            <div className="text-[9.5px] uppercase tracking-[0.04em] text-ink2">{k}</div>
-            <div className="mt-0.5 font-mono text-[13px] font-semibold">{v}</div>
+      {advanced && (
+        <>
+          <button
+            onClick={onOpen}
+            className="self-start rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2"
+          >
+            {t.cavOpen}
+          </button>
+
+          <div className="grid grid-cols-2 gap-1.5">
+            {metrics.map(([k, v]) => (
+              <div key={k} className="rounded-lg border border-border px-2.5 py-1.5">
+                <div className="text-[9.5px] uppercase tracking-[0.04em] text-ink2">{k}</div>
+                <div className="mt-0.5 font-mono text-[13px] font-semibold">{v}</div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      {c.clipped && <div className="text-[11.5px] text-ink2">{t.cavClipped}</div>}
+          {c.clipped && <div className="text-[11.5px] text-ink2">{t.cavClipped}</div>}
+        </>
+      )}
 
       {canFlag ? (
         <div className="flex flex-col gap-2">

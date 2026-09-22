@@ -16,17 +16,17 @@ export default async function ResetPasswordPage({
 
   return (
     <>
-      <p className="text-sm text-sap">Choose a new password.</p>
+      <p className="text-sm text-ink2">Choose a new password.</p>
 
       {error && (
-        <p className="mt-4 rounded-lg border border-status-critical/40 bg-status-critical/10 px-3 py-2 text-sm text-bone">
+        <p className="mt-4 rounded-lg border border-status-critical/40 bg-status-critical/10 px-3 py-2 text-sm text-ink">
           {error}
         </p>
       )}
 
       <form action={updatePassword} className="mt-6 flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="password" className="text-xs font-mono font-medium uppercase tracking-wide text-sap">
+          <label htmlFor="password" className="text-xs font-mono font-medium uppercase tracking-wide text-ink2">
             New password
           </label>
           <input
@@ -35,7 +35,7 @@ export default async function ResetPasswordPage({
             type="password"
             required
             minLength={6}
-            className="rounded-lg border border-bone/15 bg-forest px-3 py-2 text-sm text-bone outline-none focus:border-amber"
+            className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
           />
         </div>
         <button

@@ -11,7 +11,7 @@ import { FlagMark, Segmented, relTime } from "./ui";
 // straight to the full analysis dialog for it, same shortcut people expect from a file grid.
 export default function CavitationGrid({
   items, summary, filter, onFilter, hasMore, onOlder, scopedToRange,
-  selectedId, onSelect, onOpen, t, locale,
+  selectedId, onSelect, onOpen, t, locale, advanced,
 }: {
   items: Cavitation[]; summary: CavitationSummary | null;
   filter: CavitationFilter; onFilter: (f: CavitationFilter) => void;
@@ -20,6 +20,9 @@ export default function CavitationGrid({
   scopedToRange: boolean;
   selectedId: number | null; onSelect: (id: number) => void; onOpen: () => void;
   t: Strings; locale: string | undefined;
+  // Off by default: hides raw mV/kHz numbers on each card and disables the
+  // double-click shortcut into the full-analysis dialog. See settings-oscilloscope.tsx.
+  advanced: boolean;
 }) {
   const tiles: [string, string][] = [
     [t.cavLast24h, String(summary?.last_24h ?? 0)],
@@ -57,7 +60,7 @@ export default function CavitationGrid({
             <button
               key={c.id}
               onClick={() => onSelect(c.id)}
-              onDoubleClick={() => { onSelect(c.id); onOpen(); }}
+              onDoubleClick={() => { onSelect(c.id); if (advanced) onOpen(); }}
               aria-current={c.id === selectedId}
               className={`flex flex-col gap-1.5 rounded-lg border px-3 py-2.5 text-left text-xs ${
                 c.id === selectedId ? "border-accent bg-surface-2" : "border-border hover:bg-surface-2"
@@ -69,10 +72,12 @@ export default function CavitationGrid({
                 <span className="whitespace-nowrap font-mono text-[11px] text-ink2">{d.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}</span>
               </span>
               <span className="text-ink2">{t[CLASS_KEY[c.cls]]}</span>
-              <span className="flex justify-between font-mono text-ink2">
-                <span>{c.peak_mv !== null ? `${c.peak_mv} mV` : "-"}</span>
-                <span>{c.freq_khz !== null ? `${c.freq_khz} kHz` : "-"}</span>
-              </span>
+              {advanced && (
+                <span className="flex justify-between font-mono text-ink2">
+                  <span>{c.peak_mv !== null ? `${c.peak_mv} mV` : "-"}</span>
+                  <span>{c.freq_khz !== null ? `${c.freq_khz} kHz` : "-"}</span>
+                </span>
+              )}
             </button>
             );
           })}
