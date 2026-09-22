@@ -12,6 +12,9 @@ import { authenticateDevice, jsonResponse } from "../_shared/device.ts";
 
 const MAX_BATCH = 20;
 const MAX_POINTS = 4000;
+const MAX_FULL_BYTES = 1_500_000; // gzip of one capture is about 16 KB, this is a generous ceiling
+const BUCKET = "cavitation-full";
+const SCALE_KEYS = ["xinc", "xorig", "xref", "yinc", "yorig", "yref", "n"];
 const KEY_RE = /^\d{8}_\d{6}_\d{3}_ch\d_\d{5}$/;
 const CLASSES = new Set(["burst", "spike", "weak", "other"]);
 
@@ -19,6 +22,27 @@ function num(v: unknown): number | null {
   if (v === null || v === undefined) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+function b64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+// Returns a valid scale object, or null.
+function toScale(v: unknown): Record<string, unknown> | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  if (o.dtype !== "u2" && o.dtype !== "u1") return null;
+  const out: Record<string, unknown> = { dtype: o.dtype };
+  for (const k of SCALE_KEYS) {
+    const n = num(o[k]);
+    if (n === null) return null;
+    out[k] = n;
+  }
+  return out;
 }
 
 // Returns a row, or a string describing why the item is invalid.
@@ -97,8 +121,37 @@ export default {
       return jsonResponse({ error: "insert failed" }, 500);
     }
 
+    // Full waveforms. Also runs for captures that already existed, so old rows get backfilled.
+    // A failure here does not fail the batch: the metrics are already saved, and the uploader retries next start.
+    let full = 0;
+    const fullFailed: string[] = [];
+    for (const it of items as Record<string, unknown>[]) {
+      if (typeof it?.full_b64 !== "string") continue;
+      const key = String(it.key ?? "");
+      const scale = toScale(it.scale);
+      if (!rows.some((r) => r.capture_key === key) || !scale) { fullFailed.push(`${key}: bad full waveform`); continue; }
+      try {
+        const bytes = b64ToBytes(it.full_b64);
+        if (bytes.length === 0 || bytes.length > MAX_FULL_BYTES) throw new Error("size");
+        const path = `${device.plantId}/${key}.bin.gz`;
+        const up = await ctx.supabaseAdmin.storage.from(BUCKET)
+          .upload(path, bytes, { upsert: true, contentType: "application/gzip" });
+        if (up.error) throw up.error;
+        const upd = await ctx.supabaseAdmin.from("cavitation_captures")
+          .update({ full_path: path, scale })
+          .eq("plant_id", device.plantId).eq("capture_key", key);
+        if (upd.error) throw upd.error;
+        full++;
+      } catch (e) {
+        console.error("full waveform failed", key, e);
+        fullFailed.push(`${key}: upload failed`);
+      }
+    }
+
     return jsonResponse({
       ok: true,
+      full,
+      full_failed: fullFailed,
       received: items.length,
       inserted: data?.length ?? 0,
       duplicates: rows.length - (data?.length ?? 0),

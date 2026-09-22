@@ -14,7 +14,7 @@ import AeTab from "./ae-tab";
 import EventsTab from "./events-tab";
 import CavitationTab from "./cavitation-tab";
 
-export type PanelTab = "ae" | "env" | "events" | "cav";
+export type PanelTab = "ae" | "env" | "events" | "cav" | "irr";
 
 export default function MetricsPanel({
   node, t, lang, isLive, sensors, panelSensor, onPanelSensor, tab, onTab,
@@ -34,7 +34,10 @@ export default function MetricsPanel({
   const sourceLabel = dot ? `${node.label} · ${dot.label}` : node.label;
   const ae = dot ? dot.ae : node.ae;
   const tabs: { id: PanelTab; label: string }[] = isLive
-    ? [{ id: "env", label: t.tabEnv }, { id: "cav", label: t.tabCav }]
+    ? [
+        { id: "env", label: t.tabEnv }, { id: "cav", label: t.tabCav },
+        ...(canEditIrrigation ? [{ id: "irr" as const, label: t.tabIrr }] : []),
+      ]
     : [{ id: "ae", label: t.tabAe }, { id: "env", label: t.tabEnv }, { id: "events", label: t.tabEvents }];
 
   return (
@@ -58,10 +61,6 @@ export default function MetricsPanel({
           </div>
         )}
       </div>
-
-      {isLive && canEditIrrigation && (
-        <IrrigationBlock key={irrigation?.updated_at ?? "default"} config={irrigation} t={t} onSave={onSaveIrrigation} />
-      )}
 
       {sensors.length > 1 && (
         <div className="mt-3.5 flex items-center gap-2">
@@ -96,7 +95,9 @@ export default function MetricsPanel({
       </div>
 
       <div className="mt-3 flex flex-col gap-3.5 min-[901px]:min-h-0 min-[901px]:flex-1 min-[901px]:overflow-y-auto">
-        {isLive && tab === "cav" ? (
+        {isLive && tab === "irr" && canEditIrrigation ? (
+          <IrrigationBlock key={irrigation?.updated_at ?? "default"} config={irrigation} t={t} onSave={onSaveIrrigation} />
+        ) : isLive && tab === "cav" ? (
           <CavitationTab key={node.id} plantId={node.id} t={t} lang={lang} canFlag={canEditIrrigation} />
         ) : isLive || tab === "env" ? (
           <EnvTab

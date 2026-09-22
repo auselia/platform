@@ -215,6 +215,21 @@ try {
        values ($1,'20260921_130000_000_ch1_00002',now(),'burst',-1,1,'{1,2}')`, [pA]));
     await as(uA, () => denied("delete from cavitation_captures where id = $1", [capA]));
   });
+  await test("A can read own full waveform files and not B's", async () => {
+    for (const p of [pA, pB]) {
+      await client.query(
+        "insert into storage.objects (bucket_id, name) values ('cavitation-full', $1)", [`${p}/20260921_120000_000_ch1_00001.bin.gz`]);
+    }
+    const r = await as(uA, () => client.query("select name from storage.objects where bucket_id = 'cavitation-full'"));
+    eq(r.rows.map((x) => x.name.split("/")[0]).filter((x) => x === pA || x === pB), [pA]);
+  });
+  await test("anon cannot read full waveform files, and nobody can write them from the client", async () => {
+    await client.query("insert into storage.objects (bucket_id, name) values ('cavitation-full', $1)", [`${pA}/x.bin.gz`]);
+    const r = await as(null, () => client.query("select 1 from storage.objects where bucket_id = 'cavitation-full'"));
+    eq(r.rowCount, 0);
+    await as(uA, () => denied("insert into storage.objects (bucket_id, name) values ('cavitation-full', $1)", [`${pA}/y.bin.gz`]));
+    await as(uA, () => denied("delete from storage.objects where bucket_id = 'cavitation-full' and name = $1", [`${pA}/x.bin.gz`]));
+  });
   await test("flag note is limited to 300 characters", async () => {
     await client.query("savepoint n");
     let failed = false;

@@ -61,6 +61,15 @@ export type Cavitation = {
   ev1_us: number | null;
   flagged: boolean;
   flag_note: string;
+  full_path: string | null;
+  scale: CavitationScale | null;
+};
+
+// What the browser needs to turn raw ADC counts into volts and seconds.
+export type CavitationScale = {
+  dtype: "u2" | "u1"; n: number;
+  xinc: number; xorig: number; xref: number;
+  yinc: number; yorig: number; yref: number;
 };
 
 // y is the min/max-decimated trace in units of 0.1 mV, evenly spread from t0_us to t1_us.

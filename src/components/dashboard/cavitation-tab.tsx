@@ -6,12 +6,13 @@ import type { Cavitation, CavitationSummary } from "@/lib/types";
 import type { Lang, Strings } from "@/lib/dashboard/i18n";
 import { CLASS_KEY, nearestIndex, niceLimit, traceMv, traceTime } from "@/lib/dashboard/cavitation";
 import { Segmented, relTime } from "./ui";
+import CavitationDialog from "./cavitation-dialog";
 
 const PAGE = 40;
 const POLL_MS = 20_000;
 // Everything except the trace: the list stays light and the trace loads on demand.
 const COLS =
-  "id,plant_id,capture_key,ts,cls,level_mv,peak_mv,snr,dur_us,swings,freq_khz,clipped,t0_us,t1_us,ev0_us,ev1_us,flagged,flag_note";
+  "id,plant_id,capture_key,ts,cls,level_mv,peak_mv,snr,dur_us,swings,freq_khz,clipped,t0_us,t1_us,ev0_us,ev1_us,flagged,flag_note,full_path,scale";
 
 type Filter = "all" | "flagged";
 
@@ -30,6 +31,7 @@ export default function CavitationTab({
   const [hasMore, setHasMore] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [traces, setTraces] = useState<Record<number, number[]>>({});
   const traceAsked = useRef(new Set<number>());
 
@@ -125,7 +127,7 @@ export default function CavitationTab({
           {selected ? (
             <Viewer
               key={selected.id} c={selected} y={traces[selected.id]} t={t} locale={locale}
-              canFlag={canFlag} onFlag={saveFlag}
+              canFlag={canFlag} onFlag={saveFlag} onOpen={() => setDialogOpen(true)}
             />
           ) : (
             <div className="text-xs text-ink2">{t.cavSelect}</div>
@@ -177,6 +179,13 @@ export default function CavitationTab({
           <div className="text-[11px] text-ink2">{t.cavClsHint}</div>
         </>
       )}
+      {dialogOpen && selected && (
+        <CavitationDialog
+          supabase={supabase} list={visible} index={Math.max(0, visible.findIndex((x) => x.id === selected.id))}
+          t={t} lang={lang} canFlag={canFlag}
+          onNavigate={setSelectedId} onClose={() => setDialogOpen(false)} onFlag={saveFlag}
+        />
+      )}
     </>
   );
 }
@@ -193,10 +202,11 @@ function FlagMark({ title }: { title: string }) {
 }
 
 function Viewer({
-  c, y, t, locale, canFlag, onFlag,
+  c, y, t, locale, canFlag, onFlag, onOpen,
 }: {
   c: Cavitation; y: number[] | undefined; t: Strings; locale: string | undefined; canFlag: boolean;
   onFlag: (c: Cavitation, flagged: boolean, note: string) => Promise<boolean>;
+  onOpen: () => void;
 }) {
   const [note, setNote] = useState(c.flag_note);
   const [busy, setBusy] = useState(false);
@@ -233,6 +243,12 @@ function Viewer({
       </div>
 
       <Trace c={c} y={y} t={t} />
+      <button
+        onClick={onOpen}
+        className="self-start rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface-2"
+      >
+        {t.cavOpen}
+      </button>
 
       <div className="grid grid-cols-3 gap-1.5">
         {metrics.map(([k, v]) => (
