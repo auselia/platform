@@ -16,3 +16,5 @@ export type DNode = {
 };
 
 export type Severity = "critical" | "warning" | "good";
+
+export type PanelTab = "env" | "cav" | "ae" | "events" | "settings";

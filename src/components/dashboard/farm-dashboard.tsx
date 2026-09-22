@@ -10,12 +10,10 @@ import { gridGeo, type Geo } from "@/lib/dashboard/geo";
 import { DEMO_GEO } from "@/lib/dashboard/demo-geo";
 import { buildEnv, type EnvKey, type Range } from "@/lib/dashboard/env";
 import { buildSensorLayout, liveSensor, simNode, type SensorDot } from "@/lib/dashboard/sim";
-import type { DNode, Severity } from "@/lib/dashboard/types";
+import type { DNode, PanelTab, Severity } from "@/lib/dashboard/types";
 import ThemeToggle from "@/components/theme-toggle";
 import Wordmark from "@/components/wordmark";
-import MapView from "./map-view";
-import MetricsPanel, { type PanelTab } from "./metrics-panel";
-import FocusShell from "./focus-shell";
+import TabShell from "./tab-shell";
 import type { IrrigationPayload } from "./irrigation-block";
 import { relTime, statusLabel } from "./ui";
 
@@ -49,6 +47,7 @@ export default function FarmDashboard({
   const org = orgs.find((o) => o.id === orgId) ?? orgs[0];
   const isDemo = org.is_demo;
   const isLive = !isDemo;
+  const canEditIrrigation = isLive && !!userEmail;
 
   const [plants, setPlants] = useState<Plant[]>([]);
   const [ingest, setIngest] = useState<Record<string, PlantIngestStatus>>({});
@@ -302,10 +301,10 @@ export default function FarmDashboard({
 
         {plantsLoaded && !nodes.length ? (
           <p className="py-16 text-center text-sm text-ink2">{t.noPlants}</p>
-        ) : (tab === "env" || tab === "cav") && node ? (
-          <FocusShell
+        ) : node ? (
+          <TabShell
             node={node} t={t} lang={lang} isLive={isLive} tab={tab} onTab={setTab}
-            canEditIrrigation={isLive && !!userEmail}
+            canEditIrrigation={canEditIrrigation}
             sensors={sensors} panelSensor={panelSensor} onPanelSensor={setPanelSensor}
             dates={dates} env={env} envVar={envVar} onEnvVar={setEnvVar}
             range={range} onRange={setRange} loading={!rowsLoaded}
@@ -313,29 +312,9 @@ export default function FarmDashboard({
             geo={geo} nodes={nodes} selectedId={selectedId} filters={filters} counts={counts}
             onToggleFilter={(s) => setFilters((f) => ({ ...f, [s]: !f[s] }))}
             onSelect={selectNode} layoutFor={layoutFor}
+            orgName={org.name} irrigation={irrigation} onSaveIrrigation={saveIrrigation}
           />
-        ) : (
-          <div className="grid grid-cols-1 gap-[22px] min-[901px]:min-h-0 min-[901px]:flex-1 min-[901px]:grid-cols-[minmax(0,1.7fr)_minmax(280px,420px)] min-[901px]:grid-rows-[minmax(0,1fr)]">
-            <MapView
-              geo={geo} nodes={nodes} isLive={isLive} selectedId={selectedId} filters={filters} counts={counts} t={t}
-              onToggleFilter={(s) => setFilters((f) => ({ ...f, [s]: !f[s] }))}
-              onSelect={selectNode}
-              layoutFor={layoutFor}
-              onViewFullSensor={(id) => { setPanelSensor(id); }}
-            />
-            {node && (
-              <MetricsPanel
-                node={node} t={t} lang={lang} isLive={isLive}
-                sensors={sensors} panelSensor={panelSensor} onPanelSensor={setPanelSensor}
-                tab={tab} onTab={setTab}
-                dates={dates} env={env} envVar={envVar} onEnvVar={setEnvVar}
-                range={range} onRange={setRange} loading={!rowsLoaded}
-                irrigation={irrigation} onSaveIrrigation={saveIrrigation}
-                canEditIrrigation={isLive && !!userEmail}
-              />
-            )}
-          </div>
-        )}
+        ) : null}
       </div>
 
       {!isLive && (
