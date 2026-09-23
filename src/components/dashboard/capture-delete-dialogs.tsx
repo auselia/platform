@@ -15,6 +15,9 @@ const LIST_LIMIT = 100;
 const fill = (s: string, v: Record<string, string | number>) =>
   Object.entries(v).reduce((acc, [k, x]) => acc.replaceAll(`{${k}}`, String(x)), s);
 
+// Pick the singular string for exactly one, the plural otherwise.
+const plural = (n: number, many: string, one: string, shown: string | number = n) => fill(n === 1 ? one : many, { n: shown });
+
 const danger = "rounded-lg bg-status-critical px-3.5 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45";
 const quiet = "rounded-lg border border-border px-3.5 py-2 text-xs font-semibold text-ink disabled:opacity-45";
 const field = "rounded-lg border border-border bg-bg px-2.5 py-1.5 text-xs text-ink";
@@ -35,8 +38,8 @@ function Modal({ children, onClose, locked }: { children: React.ReactNode; onClo
 
 function summarize(t: Strings, r: DeleteResult) {
   if (r.failed && r.deleted === 0) return t.delFailed;
-  const parts = [r.stopped ? fill(t.delStopped, { n: r.deleted }) : fill(t.delDone, { n: r.deleted })];
-  if (r.filesLeft) parts.push(fill(t.delFilesLeft, { n: r.filesLeft }));
+  const parts = [r.stopped ? fill(t.delStopped, { n: r.deleted }) : plural(r.deleted, t.delDone, t.delDoneOne)];
+  if (r.filesLeft) parts.push(plural(r.filesLeft, t.delFilesLeft, t.delFilesLeftOne));
   if (r.failed) parts.push(t.delFailed);
   return parts.join(" ");
 }
@@ -84,7 +87,7 @@ export function DeleteCapturesDialog({
       )}
       {flagged > 0 && (
         <p className="mt-2 text-[12px] font-semibold text-status-critical">
-          {n === 1 ? t.delFlaggedNote : fill(t.delFlaggedCount, { n: flagged })}
+          {n === 1 ? t.delFlaggedNote : plural(flagged, t.delFlaggedCount, t.delFlaggedCountOne)}
         </p>
       )}
       {needsTyping && (
@@ -97,7 +100,7 @@ export function DeleteCapturesDialog({
       <div className="mt-5 flex justify-end gap-2">
         <button onClick={onClose} disabled={busy} className={quiet}>{t.cancel}</button>
         <button onClick={run} disabled={busy || !ready} className={danger}>
-          {busy ? t.delWorking : n === 1 ? t.delOneBtn : fill(t.delConfirmBtn, { n })}
+          {busy ? t.delWorking : n === 1 ? t.delOneBtn : plural(n, t.delConfirmBtn, t.delConfirmBtnOne)}
         </button>
       </div>
     </Modal>
@@ -206,7 +209,7 @@ export function ManageCapturesDialog({
       </div>
 
       <div className="mb-1.5 text-xs text-ink2">
-        {total === null ? t.delCounting : total === 0 ? t.delNoneMatch : fill(t.delMatching, { n: total.toLocaleString(locale) })}
+        {total === null ? t.delCounting : total === 0 ? t.delNoneMatch : plural(total, t.delMatching, t.delMatchingOne, total.toLocaleString(locale))}
       </div>
 
       {rows.length > 0 && (
@@ -263,7 +266,7 @@ export function ManageCapturesDialog({
             <div className="flex justify-end gap-2">
               <button onClick={onClose} className={quiet}>{t.cancel}</button>
               <button onClick={run} disabled={count === 0 || !confirmed} className={danger}>
-                {fill(t.delConfirmBtn, { n: count.toLocaleString(locale) })}
+                {plural(count, t.delConfirmBtn, t.delConfirmBtnOne, count.toLocaleString(locale))}
               </button>
             </div>
           </>
