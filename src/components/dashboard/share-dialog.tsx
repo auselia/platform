@@ -6,10 +6,11 @@ import type { Lang, Strings } from "@/lib/dashboard/i18n";
 import {
   createInvite, revokeInvite, resendInvite, changeRole, removeMember, listMembers, listPendingInvites,
 } from "@/app/dashboard/sharing-actions";
+import { RESEND_COOLDOWN_MS } from "@/lib/dashboard/invites";
 import { relTime } from "./ui";
 
 type Member = { user_id: string; email: string; role: string; joined_at: string };
-type Invite = { id: string; email: string; role: string; created_at: string };
+type Invite = { id: string; email: string; role: string; sent_at: number };
 
 const roleLabel = (t: Strings, r: string) =>
   r === "owner" ? t.shareRoleOwner : r === "editor" ? t.shareRoleEditor : t.shareRoleViewer;
@@ -107,8 +108,9 @@ export default function ShareDialog({
                       key={inv.id} inv={inv} t={t}
                       onRevoke={async () => { await revokeInvite(inv.id, lang); await load(); }}
                       onResend={async () => {
-                        await resendInvite({ inviteId: inv.id, orgId, orgName, email: inv.email, role: inv.role as "editor" | "viewer", lang });
+                        const r = await resendInvite({ inviteId: inv.id, orgId, orgName, email: inv.email, role: inv.role as "editor" | "viewer", lang });
                         await load();
+                        return r;
                       }}
                     />
                   ))}
@@ -185,18 +187,52 @@ function MemberRow({
 function InviteRow({
   inv, t, onRevoke, onResend,
 }: {
-  inv: Invite; t: Strings; onRevoke: () => void; onResend: () => void;
+  inv: Invite; t: Strings; onRevoke: () => void;
+  onResend: () => Promise<{ ok: true } | { ok: false; error: string }>;
 }) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ text: string; ok: boolean } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  // Tick so the button re-enables by itself once the cooldown passes.
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 10000);
+    return () => clearInterval(id);
+  }, []);
+
+  const coolingDown = now - inv.sent_at < RESEND_COOLDOWN_MS;
+
+  async function resend() {
+    setBusy(true);
+    setNote(null);
+    const r = await onResend();
+    setBusy(false);
+    setNow(Date.now());
+    setNote(r.ok ? { text: t.shareResent, ok: true } : { text: r.error, ok: false });
+  }
+
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-border px-2.5 py-2">
-      <div className="min-w-0">
-        <div className="truncate text-[13px] text-ink">{inv.email}</div>
-        <div className="text-[10.5px] text-ink2">{roleLabel(t, inv.role)} · {relTime(new Date(inv.created_at), t)}</div>
+    <div className="rounded-lg border border-border px-2.5 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="truncate text-[13px] text-ink">{inv.email}</div>
+          <div className="text-[10.5px] text-ink2">
+            {roleLabel(t, inv.role)} · {t.shareSentAgo} {relTime(new Date(inv.sent_at), t)}
+          </div>
+        </div>
+        <div className="flex flex-none items-center gap-2">
+          <button
+            onClick={resend} disabled={busy || coolingDown} title={coolingDown ? t.shareResendWait : undefined}
+            className="text-[11px] font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {busy ? t.shareSending : t.shareResend}
+          </button>
+          <button onClick={onRevoke} className="text-[11px] font-semibold text-status-critical">{t.shareRevoke}</button>
+        </div>
       </div>
-      <div className="flex flex-none items-center gap-2">
-        <button onClick={onResend} className="text-[11px] font-semibold text-accent">{t.shareResend}</button>
-        <button onClick={onRevoke} className="text-[11px] font-semibold text-status-critical">{t.shareRevoke}</button>
-      </div>
+      {note && (
+        <p className={`mt-1 text-[11px] ${note.ok ? "text-ink2" : "text-status-critical"}`}>{note.text}</p>
+      )}
     </div>
   );
 }
