@@ -20,11 +20,11 @@ const btn = "rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold
 const field = "rounded-md border-[1.5px] border-border bg-surface px-1.5 py-1 text-xs text-ink";
 
 export default function CavitationDialog({
-  supabase, list, index, t, lang, canFlag, onNavigate, onClose, onFlag,
+  supabase, list, index, t, lang, canFlag, noFlagMessage, onNavigate, onClose, onFlag,
 }: {
   supabase: SupabaseClient;
   list: Cavitation[]; index: number;
-  t: Strings; lang: Lang; canFlag: boolean;
+  t: Strings; lang: Lang; canFlag: boolean; noFlagMessage: string;
   onNavigate: (id: number) => void;
   onClose: () => void;
   onFlag: (c: Cavitation, flagged: boolean, note: string) => Promise<boolean>;
@@ -334,7 +334,7 @@ export default function CavitationDialog({
               </div>
             </>
           ) : (
-            <div className="text-[11.5px] text-ink2">{c.flagged && c.flag_note ? c.flag_note : t.cavSignIn}</div>
+            <div className="text-[11.5px] text-ink2">{c.flagged && c.flag_note ? c.flag_note : noFlagMessage}</div>
           )}
         </div>
       </div>

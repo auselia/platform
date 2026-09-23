@@ -2,16 +2,18 @@
 
 import type { CavitationSummary } from "@/lib/types";
 import type { Strings } from "@/lib/dashboard/i18n";
+import ScopeSettings from "./scope-settings";
 import { relTime } from "./ui";
 
-// Status only, not device configuration: trigger level, timebase and capture cadence live
-// in the separate oscilloscope logger tool on the lab PC, not in this app. Reuses the
-// summary the shell already fetches for the Stress events tab, no extra query.
+// Capture status from the summary the shell already fetches, plus the oscilloscope controls for a
+// live plant. The controls do not reach the scope: they queue commands that the lab PC picks up
+// (see scope-settings.tsx). The demo plant has no scope, so it shows status only.
 export default function SettingsStress({
-  summary, loaded, t, advanced, onAdvanced,
+  summary, loaded, t, advanced, onAdvanced, plantId, isLive, canEdit,
 }: {
   summary: CavitationSummary | null; loaded: boolean; t: Strings;
   advanced: boolean; onAdvanced: (v: boolean) => void;
+  plantId: string; isLive: boolean; canEdit: boolean;
 }) {
   const tiles: [string, string][] = summary ? [
     [t.cavLast24h, String(summary.last_24h)],
@@ -68,6 +70,8 @@ export default function SettingsStress({
           )}
         </>
       )}
+
+      {isLive && <ScopeSettings plantId={plantId} canEdit={canEdit} t={t} />}
     </div>
   );
 }

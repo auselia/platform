@@ -4,9 +4,9 @@ import Link from "next/link";
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; next?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, next } = await searchParams;
 
   return (
     <>
@@ -19,6 +19,7 @@ export default async function SignupPage({
       )}
 
       <form action={signup} className="mt-6 flex flex-col gap-4">
+        {next && <input type="hidden" name="next" value={next} />}
         <div className="flex flex-col gap-1.5">
           <label htmlFor="orgName" className="text-xs font-mono font-medium uppercase tracking-wide text-ink2">
             Organization name
@@ -66,7 +67,7 @@ export default async function SignupPage({
 
       <p className="mt-6 text-center text-sm text-ink2">
         Already have an account?{" "}
-        <Link href="/login" className="text-ink underline">
+        <Link href={next ? `/login?next=${encodeURIComponent(next)}` : "/login"} className="text-ink underline">
           Sign in
         </Link>
       </p>

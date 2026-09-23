@@ -1,4 +1,6 @@
-export type Org = { id: string; name: string; is_demo: boolean };
+export type Role = "owner" | "editor" | "viewer";
+
+export type Org = { id: string; name: string; is_demo: boolean; role?: Role | null };
 
 export type Plant = {
   id: string;
@@ -82,4 +84,51 @@ export type CavitationSummary = {
   last_7d: number;
   flagged: number;
   last_capture_at: string | null;
+};
+
+// One scope setting as described by the logger on the lab PC (scopelib.SPEC). The dashboard form is
+// generated from these, so a new setting on the PC needs no dashboard change. Values travel in the
+// scope's own units (volts, seconds); `mult` and `unit` are for display only.
+export type ScopeSettingSpec =
+  | { id: string; group: string; label: string; type: "num"; unit: string; mult: number; step: number | null }
+  | { id: string; group: string; label: string; type: "bool" }
+  | { id: string; group: string; label: string; type: "enum"; options: { send: string; reply: string }[] };
+
+export type ScopeSnapshot = {
+  name: string; time: string | null; note: string | null; bytes: number | null; idn: string | null;
+  summary?: { level?: number; coupling?: string; tb?: number; source?: string };
+};
+
+export type ScopeAlert = { id: string; level: "error" | "warn" | "info"; text: string };
+
+// What the PC last reported. `settings` is null when the scope could not be reached.
+export type ScopeState = {
+  plant_id: string;
+  spec: ScopeSettingSpec[];
+  settings: Record<string, number | string> | null;
+  sweep: string | null;
+  run_state: string | null;
+  scope_error: string | null;
+  snapshots: ScopeSnapshot[];
+  guard: { enabled: boolean; snapshot: string | null } | null;
+  drift: { id: string; label: string; want: number | string; have: number | string }[];
+  logger: {
+    alive?: boolean; state?: string | null; free_gb?: number | null; run?: string | null; total?: number;
+    last_trigger_age_s?: number | null; alerts?: ScopeAlert[];
+  };
+  updated_at: string;
+};
+
+export type ScopeCommandKind = "settings_apply" | "snapshot_save" | "snapshot_apply" | "snapshot_delete" | "guard";
+export type ScopeCommandStatus = "pending" | "running" | "done" | "failed" | "expired";
+
+export type ScopeCommand = {
+  id: number;
+  plant_id: string;
+  kind: ScopeCommandKind;
+  payload: Record<string, unknown>;
+  status: ScopeCommandStatus;
+  result: { ok?: boolean; error?: string; errors?: string[]; exists?: boolean } | null;
+  created_at: string;
+  finished_at: string | null;
 };

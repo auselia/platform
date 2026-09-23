@@ -87,6 +87,18 @@ try {
   }
   await client.query("insert into organizations (id, name) values ($1,$2),($3,$4)", [oA, nameA, oB, nameB]);
   await client.query("insert into memberships (user_id, org_id, role) values ($1,$2,'owner'),($3,$4,'owner')", [uA, oA, uB, oB]);
+
+  // A third and fourth user in org A, for role testing: uC is an editor, uD a viewer.
+  // uE has no membership at all yet - the one who accepts a fresh invite below.
+  const [uC, uD, uE] = [randomUUID(), randomUUID(), randomUUID()];
+  const emailE = `e-${tag}@test.local`;
+  for (const [u, e] of [[uC, `c-${tag}@test.local`], [uD, `d-${tag}@test.local`], [uE, emailE]]) {
+    await client.query(
+      "insert into auth.users (id, aud, role, email) values ($1,'authenticated','authenticated',$2)",
+      [u, e],
+    );
+  }
+  await client.query("insert into memberships (user_id, org_id, role) values ($1,$2,'editor'),($3,$2,'viewer')", [uC, oA, uD]);
   for (const [p, o, n] of [[pA, oA, `plant-a-${tag}`], [pB, oB, `plant-b-${tag}`]]) {
     await client.query(
       "insert into plants (id, org_id, name, api_key_hash) values ($1,$2,$3,$4)",
@@ -252,6 +264,93 @@ try {
     await as(uA, () => client.query("insert into memberships (user_id, org_id) values ($1,$2)", [uA, o]));
     const r = await as(uA, () => client.query("select 1 from organizations where id = $1", [o]));
     eq(r.rowCount, 1);
+  });
+
+  console.log("\nRoles and sharing");
+  await test("editor can write irrigation config and flag captures, viewer cannot", async () => {
+    const r1 = await as(uC, () => client.query(
+      "update irrigation_config set hour1 = 7 where plant_id = $1", [pA]));
+    eq(r1.rowCount, 1);
+    const r2 = await as(uC, () => client.query(
+      "update cavitation_captures set flagged = true where id = $1", [capA]));
+    eq(r2.rowCount, 1);
+    await as(uD, () => denied("update irrigation_config set hour1 = 9 where plant_id = $1", [pA]));
+    await as(uD, () => denied("update cavitation_captures set flagged = false where id = $1", [capA]));
+  });
+  await test("viewer cannot add a plant either (tightened alongside editor)", async () => {
+    await as(uD, () => denied(
+      "insert into plants (org_id, name, api_key_hash) values ($1,'x',$2)", [oA, randomBytes(8).toString("hex")],
+    ));
+  });
+  await test("memberships.role rejects anything outside owner/editor/viewer", async () => {
+    await client.query("savepoint r");
+    let failed = false;
+    try {
+      await client.query("update memberships set role = 'superadmin' where user_id = $1 and org_id = $2", [uC, oA]);
+    } catch { failed = true; }
+    await client.query("rollback to savepoint r");
+    eq(failed, true);
+  });
+
+  await test("only the owner can see or create invitations for their org", async () => {
+    await as(uC, () => denied(
+      "insert into org_invitations (org_id, email, role, invited_by) values ($1,'x@test.local','editor',$2)", [oA, uC],
+    ));
+    const r = await as(uC, () => client.query("select 1 from org_invitations where org_id = $1", [oA]));
+    eq(r.rowCount, 0);
+  });
+  await test("owner can invite, and the invitee accepts and becomes a real member", async () => {
+    const inv = await as(uA, () => client.query(
+      "insert into org_invitations (org_id, email, role, invited_by) values ($1,$2,'editor',$3) returning token",
+      [oA, emailE, uA],
+    ));
+    const token = inv.rows[0].token;
+
+    // Someone else's email can't accept it.
+    await client.query("savepoint mismatch");
+    let mismatched = false;
+    try {
+      await as(uD, () => client.query("select accept_org_invitation($1)", [token]));
+    } catch (e) { mismatched = e.message.includes("invite_email_mismatch"); }
+    await client.query("rollback to savepoint mismatch");
+    eq(mismatched, true, "wrong-email accept should raise invite_email_mismatch");
+
+    // The actual invitee accepts.
+    await as(uE, () => client.query("select accept_org_invitation($1)", [token]));
+    const role = await as(uE, () => client.query(
+      "select role from memberships where user_id = $1 and org_id = $2", [uE, oA]));
+    eq(role.rows[0]?.role, "editor");
+
+    // Now shows up for anyone in the org, editor access included.
+    const listed = await as(uC, () => client.query(
+      "select 1 from list_org_members($1) where user_id = $2", [oA, uE]));
+    eq(listed.rowCount, 1);
+    const write = await as(uE, () => client.query(
+      "update irrigation_config set hour1 = 6 where plant_id = $1", [pA]));
+    eq(write.rowCount, 1);
+
+    // A second accept of an already-accepted invite is rejected, not silently re-run.
+    await client.query("savepoint reaccept");
+    let reaccepted = false;
+    try {
+      await as(uE, () => client.query("select accept_org_invitation($1)", [token]));
+    } catch (e) { reaccepted = e.message.includes("invite_not_pending"); }
+    await client.query("rollback to savepoint reaccept");
+    eq(reaccepted, true, "accepting a used invite should raise invite_not_pending");
+  });
+  await test("owner can change a member's role and remove one; nobody else can", async () => {
+    await as(uC, () => denied("update memberships set role = 'viewer' where user_id = $1 and org_id = $2", [uD, oA]));
+    await as(uC, () => denied("delete from memberships where user_id = $1 and org_id = $2", [uD, oA]));
+    const upd = await as(uA, () => client.query(
+      "update memberships set role = 'viewer' where user_id = $1 and org_id = $2 returning role", [uC, oA]));
+    eq(upd.rows[0]?.role, "viewer");
+    const del = await as(uA, () => client.query(
+      "delete from memberships where user_id = $1 and org_id = $2", [uD, oA]));
+    eq(del.rowCount, 1);
+  });
+  await test("nobody can delete or demote the owner, including the owner themself", async () => {
+    await as(uA, () => denied("update memberships set role = 'editor' where user_id = $1 and org_id = $2", [uA, oA]));
+    await as(uA, () => denied("delete from memberships where user_id = $1 and org_id = $2", [uA, oA]));
   });
 } finally {
   await client.query("rollback");
