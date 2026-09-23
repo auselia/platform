@@ -2,23 +2,32 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
 export async function signup(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
   const orgName = String(formData.get("orgName") ?? "").trim();
+  const rawNext = String(formData.get("next") ?? "");
+  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "";
 
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  const origin = (await headers()).get("origin");
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: next ? { emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}` } : undefined,
+  });
 
   if (error) {
-    redirect(`/signup?error=${encodeURIComponent(error.message)}`);
+    redirect(`/signup?error=${encodeURIComponent(error.message)}${next ? `&next=${encodeURIComponent(next)}` : ""}`);
   }
 
   // No session yet means this project requires email confirmation - there's
   // no authenticated request to safely create their org from yet. The
-  // dashboard page itself handles "logged in but no org" as an onboarding
-  // step, so this resolves itself on their first real login.
+  // confirmation link (emailRedirectTo above, when there's a next to honor)
+  // carries them to /auth/callback -> next itself; otherwise the dashboard
+  // page handles "logged in but no org" as an onboarding step on first login.
   if (!data.session) {
     redirect("/signup/check-email");
   }
@@ -46,5 +55,5 @@ export async function signup(formData: FormData) {
     redirect(`/signup?error=${encodeURIComponent(memberError.message)}`);
   }
 
-  redirect("/dashboard");
+  redirect(next || "/dashboard");
 }

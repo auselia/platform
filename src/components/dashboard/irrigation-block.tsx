@@ -12,11 +12,12 @@ export type IrrigationPayload = {
 };
 
 export default function IrrigationBlock({
-  config, t, onSave,
+  config, t, onSave, canEdit,
 }: {
   config: IrrigationConfig | null;
   t: Strings;
   onSave: (p: IrrigationPayload) => Promise<boolean>;
+  canEdit: boolean;
 }) {
   const c = config ?? { hour1: 8, min1: 0, hour2: 18, min2: 0, duration_min: 5, enabled: true, updated_at: null };
   const [enabled, setEnabled] = useState(c.enabled);
@@ -46,10 +47,10 @@ export default function IrrigationBlock({
       <div className="mb-3.5 flex items-center gap-2.5">
         <label className="relative inline-block h-[22px] w-10 flex-none">
           <input
-            type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)}
-            className="peer absolute inset-0 m-0 h-full w-full cursor-pointer opacity-0"
+            type="checkbox" checked={enabled} disabled={!canEdit} onChange={(e) => setEnabled(e.target.checked)}
+            className="peer absolute inset-0 m-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
           />
-          <span className="pointer-events-none absolute inset-0 rounded-full bg-border transition-colors peer-checked:bg-status-ok" />
+          <span className="pointer-events-none absolute inset-0 rounded-full bg-border transition-colors peer-checked:bg-status-ok peer-disabled:opacity-45" />
           <span className="pointer-events-none absolute left-0.5 top-0.5 h-[18px] w-[18px] rounded-full bg-surface shadow transition-transform peer-checked:translate-x-[18px]" />
         </label>
         <span className="font-mono text-xs font-bold uppercase tracking-[0.04em] text-ink">
@@ -59,22 +60,28 @@ export default function IrrigationBlock({
       <div className="grid grid-cols-2 gap-x-3.5 gap-y-2.5">
         <div className="flex flex-col gap-[5px]">
           <label className={label}>{t.irrMorning}</label>
-          <input type="time" value={t1} disabled={!enabled} onChange={(e) => setT1(e.target.value)} className={field} />
+          <input type="time" value={t1} disabled={!canEdit || !enabled} onChange={(e) => setT1(e.target.value)} className={field} />
         </div>
         <div className="flex flex-col gap-[5px]">
           <label className={label}>{t.irrAfternoon}</label>
-          <input type="time" value={t2} disabled={!enabled} onChange={(e) => setT2(e.target.value)} className={field} />
+          <input type="time" value={t2} disabled={!canEdit || !enabled} onChange={(e) => setT2(e.target.value)} className={field} />
         </div>
         <div className="flex flex-col gap-[5px]">
           <label className={label}>{t.irrDuration}</label>
-          <input type="number" min={0} max={60} value={dur} disabled={!enabled} onChange={(e) => setDur(e.target.value)} className={field} />
+          <input type="number" min={0} max={60} value={dur} disabled={!canEdit || !enabled} onChange={(e) => setDur(e.target.value)} className={field} />
         </div>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2.5">
-        <button onClick={save} className="rounded-lg bg-amber px-4 py-2 text-[13px] font-semibold text-forest">
-          {t.irrSave}
-        </button>
-        <span className="text-[11px] text-ink2">{status || updated}</span>
+        {canEdit ? (
+          <>
+            <button onClick={save} className="rounded-lg bg-amber px-4 py-2 text-[13px] font-semibold text-forest">
+              {t.irrSave}
+            </button>
+            <span className="text-[11px] text-ink2">{status || updated}</span>
+          </>
+        ) : (
+          <span className="text-[11px] text-ink2">{t.irrViewOnly}</span>
+        )}
       </div>
     </div>
   );

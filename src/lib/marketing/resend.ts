@@ -1,34 +1,6 @@
 import type { Lang } from "./i18n";
 import { STR } from "./i18n";
-
-async function send(payload: {
-  to: string[];
-  subject: string;
-  text: string;
-  replyTo?: string;
-}) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error("Resend is not configured (missing RESEND_API_KEY)");
-
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: "Auselia <no-reply@auselia.cl>",
-      to: payload.to,
-      reply_to: payload.replyTo,
-      subject: payload.subject,
-      text: payload.text,
-    }),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Resend responded ${res.status}: ${await res.text()}`);
-  }
-}
+import { send } from "@/lib/email/resend";
 
 // Notification for us, sent to CONTACT_NOTIFICATION_TO. The database row
 // (see app/contact/actions.ts) is the source of truth; a Resend failure here

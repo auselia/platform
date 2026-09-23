@@ -1,4 +1,6 @@
-export type Org = { id: string; name: string; is_demo: boolean };
+export type Role = "owner" | "editor" | "viewer";
+
+export type Org = { id: string; name: string; is_demo: boolean; role?: Role | null };
 
 export type Plant = {
   id: string;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { IrrigationConfig, Reading } from "@/lib/types";
+import type { IrrigationConfig, Reading, Role } from "@/lib/types";
 import type { Lang, Strings } from "@/lib/dashboard/i18n";
 import type { EnvKey, EnvSeries, Range } from "@/lib/dashboard/env";
 import type { SensorDot } from "@/lib/dashboard/sim";
@@ -31,7 +31,7 @@ import type { Layout } from "./map-view";
 // switcher (below the tab bar) instead. Desktop only (min-[1040px]); below that it falls
 // back to a plain stacked column.
 export default function TabShell({
-  node, t, lang, isLive, tab, onTab, canEditIrrigation,
+  node, t, lang, isLive, tab, onTab, canEdit, role,
   sensors, panelSensor, onPanelSensor,
   dates, env, envVar, onEnvVar, range, onRange, loading,
   rows, anchorMs, dayAnchor, onDayAnchor, lastUpdated,
@@ -39,7 +39,7 @@ export default function TabShell({
   orgName, irrigation, onSaveIrrigation, summary,
 }: {
   node: DNode; t: Strings; lang: Lang; isLive: boolean;
-  tab: PanelTab; onTab: (t: PanelTab) => void; canEditIrrigation: boolean;
+  tab: PanelTab; onTab: (t: PanelTab) => void; canEdit: boolean; role: Role | null;
   sensors: SensorDot[]; panelSensor: string | null; onPanelSensor: (id: string | null) => void;
   dates: Date[]; env: EnvSeries; envVar: EnvKey; onEnvVar: (k: EnvKey) => void;
   range: Range; onRange: (r: Range) => void; loading: boolean;
@@ -108,6 +108,10 @@ export default function TabShell({
   // click as "pick it and leave," not an intermediate state.
   const enterPlant = (id: string) => { onSelect(id); onTab("env"); };
   const enterSensor = (dotId: string) => { onPanelSensor(dotId); onTab("env"); };
+
+  // A signed-in Viewer being told "sign in to flag" would be wrong - that message is only
+  // for the demo/unauthenticated case. A real Viewer gets a distinct, accurate one.
+  const noFlagMessage = role === "viewer" ? t.cavViewOnly : t.cavSignIn;
 
   const dot = panelSensor ? sensors.find((s) => s.id === panelSensor) : undefined;
   const sourceLabel = dot ? `${node.label} · ${dot.label}` : node.label;
@@ -222,7 +226,7 @@ export default function TabShell({
           )
         ) : isSettings ? (
           section === "irrigation" ? (
-            <IrrigationBlock config={irrigation} t={t} onSave={onSaveIrrigation} />
+            <IrrigationBlock config={irrigation} t={t} onSave={onSaveIrrigation} canEdit={canEdit} />
           ) : section === "stress" ? (
             <SettingsStress
               summary={cav.summary} loaded={cav.loaded} t={t}
@@ -252,7 +256,7 @@ export default function TabShell({
           {tab === "stress" ? (
             <CavitationDetails
               c={cav.selected} y={cav.selected ? cav.traces[cav.selected.id] : undefined} t={t} locale={locale}
-              canFlag={canEditIrrigation} onFlag={cav.saveFlag} onOpen={() => setDialogOpen(true)} advanced={advanced}
+              canFlag={canEdit} noFlagMessage={noFlagMessage} onFlag={cav.saveFlag} onOpen={() => setDialogOpen(true)} advanced={advanced}
             />
           ) : (
             <>
@@ -309,7 +313,7 @@ export default function TabShell({
       {dialogOpen && cav.selected && advanced && (
         <CavitationDialog
           supabase={cav.supabase} list={cav.visible} index={Math.max(0, cav.visible.findIndex((x) => x.id === cav.selected!.id))}
-          t={t} lang={lang} canFlag={canEditIrrigation}
+          t={t} lang={lang} canFlag={canEdit} noFlagMessage={noFlagMessage}
           onNavigate={cav.setSelectedId} onClose={() => setDialogOpen(false)} onFlag={cav.saveFlag}
         />
       )}

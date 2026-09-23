@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { createOrganization, logout } from "./actions";
 import FarmDashboard from "@/components/dashboard/farm-dashboard";
-import type { Org } from "@/lib/types";
+import type { Org, Role } from "@/lib/types";
 
 export default async function DashboardPage({
   searchParams,
@@ -24,7 +24,13 @@ export default async function DashboardPage({
     .order("is_demo", { ascending: true })
     .order("name");
 
-  const list = (orgs ?? []) as Org[];
+  // Own role per org, for the sharing/permission UI (Settings > Irrigation, Stress
+  // events flagging, the Share dialog itself) - select_own_memberships already lets
+  // a user read their own rows, no new policy needed.
+  const { data: memberships } = await supabase.from("memberships").select("org_id, role");
+  const roleByOrg = new Map<string, Role>((memberships ?? []).map((m) => [m.org_id, m.role as Role]));
+
+  const list = ((orgs ?? []) as Org[]).map((o) => ({ ...o, role: roleByOrg.get(o.id) ?? null }));
   const realOrgs = list.filter((o) => !o.is_demo);
 
   if (realOrgs.length === 0) {

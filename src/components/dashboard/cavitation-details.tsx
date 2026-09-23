@@ -9,10 +9,14 @@ import { CLASS_KEY, nearestIndex, niceLimit, traceMv, traceTime } from "@/lib/da
 // metrics, and flag/note form. A port of the classic Cavitations tab's Viewer/Trace,
 // narrowed for the right column (2-column metric grid instead of 3).
 export default function CavitationDetails({
-  c, y, t, locale, canFlag, onFlag, onOpen, advanced,
+  c, y, t, locale, canFlag, noFlagMessage, onFlag, onOpen, advanced,
 }: {
   c: Cavitation | null; y: number[] | undefined; t: Strings; locale: string | undefined;
   canFlag: boolean;
+  // Shown in place of the flag form when canFlag is false - the demo's "sign in to flag"
+  // versus a signed-in Viewer's "viewers can't flag" are different messages, decided by
+  // the caller (tab-shell.tsx), not hardcoded here.
+  noFlagMessage: string;
   onFlag: (c: Cavitation, flagged: boolean, note: string) => Promise<boolean>;
   onOpen: () => void;
   // Off by default: hides the raw metrics grid and the full-analysis dialog
@@ -21,13 +25,14 @@ export default function CavitationDetails({
   advanced: boolean;
 }) {
   if (!c) return <div className="text-xs text-ink2">{t.cavSelect}</div>;
-  return <Viewer c={c} y={y} t={t} locale={locale} canFlag={canFlag} onFlag={onFlag} onOpen={onOpen} advanced={advanced} />;
+  return <Viewer c={c} y={y} t={t} locale={locale} canFlag={canFlag} noFlagMessage={noFlagMessage} onFlag={onFlag} onOpen={onOpen} advanced={advanced} />;
 }
 
 function Viewer({
-  c, y, t, locale, canFlag, onFlag, onOpen, advanced,
+  c, y, t, locale, canFlag, noFlagMessage, onFlag, onOpen, advanced,
 }: {
   c: Cavitation; y: number[] | undefined; t: Strings; locale: string | undefined; canFlag: boolean;
+  noFlagMessage: string;
   onFlag: (c: Cavitation, flagged: boolean, note: string) => Promise<boolean>;
   onOpen: () => void;
   advanced: boolean;
@@ -125,7 +130,7 @@ function Viewer({
           </div>
         </div>
       ) : (
-        <div className="text-[11.5px] text-ink2">{c.flagged && c.flag_note ? c.flag_note : t.cavSignIn}</div>
+        <div className="text-[11.5px] text-ink2">{c.flagged && c.flag_note ? c.flag_note : noFlagMessage}</div>
       )}
     </div>
   );

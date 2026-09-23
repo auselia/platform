@@ -15,6 +15,7 @@ import { demoStorageGet, demoStorageSet } from "@/lib/dashboard/demo-storage";
 import ThemeToggle from "@/components/theme-toggle";
 import Wordmark from "@/components/wordmark";
 import TabShell from "./tab-shell";
+import ShareDialog from "./share-dialog";
 import type { IrrigationPayload } from "./irrigation-block";
 import { relTime, statusLabel } from "./ui";
 
@@ -48,7 +49,9 @@ export default function FarmDashboard({
   const org = orgs.find((o) => o.id === orgId) ?? orgs[0];
   const isDemo = org.is_demo;
   const isLive = !isDemo;
-  const canEditIrrigation = isLive && !!userEmail;
+  const role = org.role ?? null;
+  const canEdit = isLive && (role === "owner" || role === "editor");
+  const [shareOpen, setShareOpen] = useState(false);
 
   const [plants, setPlants] = useState<Plant[]>([]);
   const [ingest, setIngest] = useState<Record<string, PlantIngestStatus>>({});
@@ -280,6 +283,20 @@ export default function FarmDashboard({
             ))}
           </div>
           <ThemeToggle />
+          {isLive && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setShareOpen(true); }}
+              aria-label={t.shareOpen}
+              title={t.shareOpen}
+              className="flex items-center justify-center rounded-full border border-border p-2 text-ink2"
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M19 8v6M22 11h-6" />
+              </svg>
+            </button>
+          )}
           {userEmail && <span className="hidden text-xs text-ink2 sm:inline">{userEmail}</span>}
           {logoutAction && (
             <form action={logoutAction}>
@@ -322,7 +339,7 @@ export default function FarmDashboard({
         ) : node ? (
           <TabShell
             node={node} t={t} lang={lang} isLive={isLive} tab={tab} onTab={setTab}
-            canEditIrrigation={canEditIrrigation}
+            canEdit={canEdit} role={role}
             sensors={sensors} panelSensor={panelSensor} onPanelSensor={setPanelSensor}
             dates={dates} env={env} envVar={envVar} onEnvVar={setEnvVar}
             range={range} onRange={setRange} loading={!rowsLoaded}
@@ -357,6 +374,10 @@ export default function FarmDashboard({
             }}
           />
         </div>
+      )}
+
+      {shareOpen && (
+        <ShareDialog orgId={org.id} orgName={org.name} role={role} t={t} lang={lang} onClose={() => setShareOpen(false)} />
       )}
     </div>
   );
