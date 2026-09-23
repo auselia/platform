@@ -241,7 +241,6 @@ export default function TabShell({
               items={cav.visible} summary={cav.summary} filter={cav.filter} onFilter={cav.setFilter}
               hasMore={cav.hasMore} onOlder={cav.older} scopedToRange={!!dayAnchor}
               selectedId={cav.selectedId} onSelect={cav.setSelectedId} onOpen={() => setDialogOpen(true)}
-              onManage={canDelete ? () => setManageOpen(true) : undefined}
               selection={canDelete ? selection : undefined}
               onSelection={canDelete ? setSelection : undefined}
               onDeleteSelection={canDelete ? () => setDeleteBatch(cav.items.filter((c) => selection.has(c.id))) : undefined}

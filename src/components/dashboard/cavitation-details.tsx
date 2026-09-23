@@ -19,7 +19,7 @@ export default function CavitationDetails({
   noFlagMessage: string;
   onFlag: (c: Cavitation, flagged: boolean, note: string) => Promise<boolean>;
   onOpen: () => void;
-  // Owners only (undefined for everyone else): a deliberately quiet link, not a button.
+  // Owners only (undefined for everyone else).
   onDelete?: () => void;
   // Off by default: hides the raw metrics grid and the full-analysis dialog
   // shortcut, keeping the waveform trace and flag/note controls. See
@@ -137,8 +137,8 @@ function Viewer({
       )}
 
       {onDelete && (
-        <div className="mt-1 border-t border-border pt-2">
-          <button onClick={onDelete} className="text-[11px] text-ink2 underline decoration-dotted underline-offset-2 hover:text-status-critical">
+        <div className="mt-1 border-t border-border pt-3">
+          <button onClick={onDelete} className="rounded-lg bg-status-critical px-3.5 py-2 text-xs font-semibold text-white hover:opacity-90">
             {t.delOne}
           </button>
         </div>
