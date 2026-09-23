@@ -25,12 +25,15 @@ export default function ScopeSettings({
   const [msg, setMsg] = useState<string | null>(null);
   const [snapName, setSnapName] = useState("");
   const [confirm, setConfirm] = useState<string | null>(null);
+  const [confirmPause, setConfirmPause] = useState(false);
+  const [restore, setRestore] = useState<boolean | null>(null);   // null follows the default: on when settings drifted
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 5000); return () => clearInterval(id); }, []);
 
   const online = pcOnline(state?.updated_at, now);
   const open = commands.some(isOpen);
-  const usable = canEdit && online && !open && !!state?.settings;
+  const canCmd = canEdit && online && !open;
+  const usable = canCmd && !!state?.settings;
   const lastApply = commands.find((c) => c.kind === "settings_apply") ?? null;
 
   // A settings command that finished: the PC has reported the new values, so the edits are no longer needed.
@@ -65,6 +68,11 @@ export default function ScopeSettings({
         <StatusPill status={online ? "good" : "idle"} t={{ ...t, statusGood: t.scPcOnline, statusNoData: t.scPcOffline }} />
         <span className="font-mono text-[11px] text-ink2">{t.scLastReport}: {relTime(new Date(state.updated_at), t)}{age !== null && age < 60 ? ` (${age} s)` : ""}</span>
       </div>
+
+      <LoggerCard
+        state={state} t={t} canCmd={canCmd} commands={commands} confirmPause={confirmPause} setConfirmPause={setConfirmPause}
+        restore={restore ?? state.drift.length > 0} setRestore={setRestore} send={send}
+      />
 
       {!online && <Notice text={t.scOfflineHint} />}
       {online && !canEdit && <Notice text={t.scViewerOnly} />}
@@ -119,6 +127,57 @@ export default function ScopeSettings({
   );
 }
 
+// Pause stops the logger cleanly (scope back to Run) whether the scope is on or off. Resume needs the scope on.
+function LoggerCard({
+  state, t, canCmd, commands, confirmPause, setConfirmPause, restore, setRestore, send,
+}: {
+  state: ScopeState; t: Strings; canCmd: boolean; commands: ScopeCommand[];
+  confirmPause: boolean; setConfirmPause: (v: boolean) => void; restore: boolean; setRestore: (v: boolean) => void;
+  send: (kind: "logger_pause" | "logger_resume", payload: Record<string, unknown>) => Promise<boolean>;
+}) {
+  const lg = state.logger;
+  const paused = lg.paused === true;
+  const running = lg.running === true;
+  const status = paused ? "warning" : running ? "good" : "critical";
+  const guard = state.guard;
+  const last = commands.find((c) => c.kind === "logger_pause" || c.kind === "logger_resume") ?? null;
+  const scopeOff = !!state.scope_error || !state.settings;
+  return (
+    <div className="flex flex-col gap-2.5 rounded-lg border border-border px-3.5 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5">
+          <span className="text-[13px] font-semibold">{t.scLogger}</span>
+          <StatusPill status={status} t={{ ...t, statusGood: t.scLoggerRunning, statusWarning: t.scLoggerPaused, statusCritical: t.scLoggerStopped }} />
+        </div>
+        {running && !paused && !confirmPause && (
+          <button className={btn} disabled={!canCmd} onClick={() => setConfirmPause(true)}>{t.scPause}</button>
+        )}
+        {!running && (
+          <button className={primary} disabled={!canCmd || scopeOff}
+            onClick={() => void send("logger_resume", { restore_guard: restore && !!guard?.enabled && !!guard.snapshot })}>{t.scResume}</button>
+        )}
+      </div>
+      {confirmPause && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11.5px] text-ink2">{t.scPauseConfirm}</span>
+          <button className={primary} disabled={!canCmd} onClick={async () => { await send("logger_pause", {}); setConfirmPause(false); }}>{t.scPauseYes}</button>
+          <button className={btn} onClick={() => setConfirmPause(false)}>{t.cancel}</button>
+        </div>
+      )}
+      {!running && guard?.enabled && guard.snapshot && (
+        <label className="flex items-center gap-2 text-[12px] text-ink2">
+          <input type="checkbox" checked={restore} onChange={(e) => setRestore(e.target.checked)} />
+          {t.scRestoreGuard}: {guard.snapshot}
+        </label>
+      )}
+      {!running && (
+        <p className="text-[11.5px] text-ink2">{scopeOff ? t.scScopeOffHint : paused ? t.scPausedHint : t.scStoppedHint}</p>
+      )}
+      <CommandStatus c={last} t={t} done={t.scDone} />
+    </div>
+  );
+}
+
 function Notice({ text, level }: { text: string; level?: "warning" | "critical" }) {
   const color = level === "critical" ? "var(--status-critical)" : level === "warning" ? "var(--status-stress)" : "var(--status-idle)";
   return (
@@ -128,10 +187,10 @@ function Notice({ text, level }: { text: string; level?: "warning" | "critical" 
   );
 }
 
-function CommandStatus({ c, t }: { c: ScopeCommand | null; t: Strings }) {
+function CommandStatus({ c, t, done }: { c: ScopeCommand | null; t: Strings; done?: string }) {
   if (!c) return null;
   if (isOpen(c)) return <span className="text-xs text-ink2">{t.scWaiting}…</span>;
-  if (c.status === "done") return <span className="text-xs text-ink2">{t.scApplied}</span>;
+  if (c.status === "done") return <span className="text-xs text-ink2">{done ?? t.scApplied}</span>;
   return (
     <span className="text-xs text-status-critical">
       {c.status === "expired" ? t.scExpired : `${t.scNotApplied}${errorText(c) ? `: ${errorText(c)}` : ""}`}
@@ -178,7 +237,7 @@ function Snapshots({
   const guard = state.guard;
   const clean = cleanSnapshotName(snapName);
   const exists = state.snapshots.some((s) => s.name === clean);
-  const lastSnap = commands.find((c) => c.kind !== "settings_apply") ?? null;
+  const lastSnap = commands.find((c) => c.kind.startsWith("snapshot") || c.kind === "guard") ?? null;
   return (
     <div className="flex flex-col gap-2.5">
       <h3 className="text-[13px] font-semibold">{t.scSnapshots}</h3>

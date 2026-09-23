@@ -113,13 +113,14 @@ export type ScopeState = {
   guard: { enabled: boolean; snapshot: string | null } | null;
   drift: { id: string; label: string; want: number | string; have: number | string }[];
   logger: {
-    alive?: boolean; state?: string | null; free_gb?: number | null; run?: string | null; total?: number;
+    alive?: boolean; running?: boolean; paused?: boolean; state?: string | null; free_gb?: number | null; run?: string | null; total?: number;
     last_trigger_age_s?: number | null; alerts?: ScopeAlert[];
   };
   updated_at: string;
 };
 
-export type ScopeCommandKind = "settings_apply" | "snapshot_save" | "snapshot_apply" | "snapshot_delete" | "guard";
+export type ScopeCommandKind =
+  | "settings_apply" | "snapshot_save" | "snapshot_apply" | "snapshot_delete" | "guard" | "logger_pause" | "logger_resume";
 export type ScopeCommandStatus = "pending" | "running" | "done" | "failed" | "expired";
 
 export type ScopeCommand = {
