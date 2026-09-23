@@ -441,3 +441,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/cavitation-ingest/deno.json"
 entrypoint = "./functions/cavitation-ingest/index.ts"
+
+[functions.scope-sync]
+enabled = true
+verify_jwt = false
+import_map = "./functions/scope-sync/deno.json"
+entrypoint = "./functions/scope-sync/index.ts"

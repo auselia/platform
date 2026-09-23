@@ -231,6 +231,7 @@ export default function TabShell({
             <SettingsStress
               summary={cav.summary} loaded={cav.loaded} t={t}
               advanced={advanced} onAdvanced={setAdvancedPersist}
+              plantId={node.id} isLive={isLive} canEdit={canEdit}
             />
           ) : (
             <SettingsPlant node={node} orgName={orgName} t={t} />
