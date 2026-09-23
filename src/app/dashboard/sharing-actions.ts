@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { STR, type Lang } from "@/lib/dashboard/i18n";
 import { sendOrgInvite } from "@/lib/dashboard/email";
+import { INVITE_TTL_MS, RESEND_COOLDOWN_MS, sentAtFromExpiry } from "@/lib/dashboard/invites";
 
 // All of these run through the normal RLS-scoped client, never service-role - the RLS
 // policies and accept_org_invitation() (supabase/migrations/20260923*.sql) are the real
@@ -72,16 +73,30 @@ export async function resendInvite(input: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: t.shareErrorGeneric };
 
+  const { data: current } = await supabase
+    .from("org_invitations")
+    .select("expires_at")
+    .eq("id", input.inviteId)
+    .eq("status", "pending")
+    .maybeSingle();
+  if (!current) return { ok: false, error: t.shareErrorGeneric };
+  if (Date.now() - sentAtFromExpiry(current.expires_at) < RESEND_COOLDOWN_MS) {
+    return { ok: false, error: t.shareResendWait };
+  }
+
   // A fresh token/expiry rotates out the old email link, same crypto.randomUUID() pattern
-  // already used for org ids elsewhere in this codebase (signup/actions.ts).
+  // already used for org ids elsewhere in this codebase (signup/actions.ts). Matching on the
+  // expires_at we just read makes two simultaneous clicks race safely: only one update lands.
   const { data, error } = await supabase
     .from("org_invitations")
-    .update({ token: crypto.randomUUID(), expires_at: new Date(Date.now() + 14 * 86400000).toISOString(), status: "pending" })
+    .update({ token: crypto.randomUUID(), expires_at: new Date(Date.now() + INVITE_TTL_MS).toISOString() })
     .eq("id", input.inviteId)
+    .eq("status", "pending")
+    .eq("expires_at", current.expires_at)
     .select("token")
-    .single();
+    .maybeSingle();
 
-  if (error) return { ok: false, error: t.shareErrorGeneric };
+  if (error || !data) return { ok: false, error: t.shareResendWait };
 
   const origin = (await headers()).get("origin");
   try {
@@ -142,15 +157,15 @@ export async function listMembers(orgId: string): Promise<{ user_id: string; ema
 }
 
 export async function listPendingInvites(orgId: string): Promise<
-  { id: string; email: string; role: string; created_at: string }[]
+  { id: string; email: string; role: string; sent_at: number }[]
 > {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("org_invitations")
-    .select("id, email, role, created_at")
+    .select("id, email, role, expires_at")
     .eq("org_id", orgId)
     .eq("status", "pending")
     .order("created_at", { ascending: false });
   if (error) return [];
-  return data ?? [];
+  return (data ?? []).map(({ expires_at, ...rest }) => ({ ...rest, sent_at: sentAtFromExpiry(expires_at) }));
 }
