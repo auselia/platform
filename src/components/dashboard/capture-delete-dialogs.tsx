@@ -41,40 +41,66 @@ function summarize(t: Strings, r: DeleteResult) {
   return parts.join(" ");
 }
 
-// One capture, one clear warning. Reached from the small link under the capture's details.
-export function DeleteOneDialog({
-  capture, supabase, t, locale, onClose, onDeleted,
+const TYPE_TO_CONFIRM_ABOVE = 25;
+
+// One capture or a hand-picked few: a clear warning, and for larger picks the same typed
+// confirmation as the bulk dialog. Reached from the small link under a capture's details, or
+// from the bar that appears when cards are selected with Ctrl/Cmd/Shift-click.
+export function DeleteCapturesDialog({
+  captures, supabase, t, locale, onClose, onDeleted,
 }: {
-  capture: Cavitation; supabase: SupabaseClient; t: Strings; locale: string | undefined;
+  captures: Cavitation[]; supabase: SupabaseClient; t: Strings; locale: string | undefined;
   onClose: () => void; onDeleted: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const n = captures.length;
+  const one = captures[0];
+  const flagged = captures.filter((c) => c.flagged).length;
+  const needsTyping = n > TYPE_TO_CONFIRM_ABOVE;
+  const ready = !needsTyping || confirm.trim().toLowerCase() === t.delWord.toLowerCase();
 
   async function run() {
     setBusy(true);
     setError("");
-    const r = await deleteIds(supabase, [capture.id]);
-    if (r.failed) { setBusy(false); setError(t.delFailed); return; }
+    const r = await deleteIds(supabase, captures.map((c) => c.id));
+    if (r.failed) { setBusy(false); setError(r.deleted ? summarize(t, r) : t.delFailed); if (r.deleted) onDeleted(); return; }
     onDeleted();
     onClose();
   }
 
   return (
     <Modal onClose={onClose} locked={busy}>
-      <h3 className="m-0 font-[family-name:var(--font-display)] text-[17px] font-semibold">{t.delOneTitle}</h3>
+      <h3 className="m-0 font-[family-name:var(--font-display)] text-[17px] font-semibold">
+        {n === 1 ? t.delOneTitle : fill(t.delSelTitle, { n })}
+      </h3>
       <p className="mt-2 rounded-lg border border-status-critical/40 bg-status-critical/10 px-3 py-2 text-[12.5px] text-ink">
-        {t.delOneWarn}
+        {n === 1 ? t.delOneWarn : fill(t.delSelWarn, { n })}
       </p>
-      <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-xs">
-        <span>{new Date(capture.ts).toLocaleString(locale, { dateStyle: "medium", timeStyle: "medium" })}</span>
-        <span className="text-ink2">{t[CLASS_KEY[capture.cls]]}</span>
-      </div>
-      {capture.flagged && <p className="mt-2 text-[12px] font-semibold text-status-critical">{t.delFlaggedNote}</p>}
+      {n === 1 && one && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-xs">
+          <span>{new Date(one.ts).toLocaleString(locale, { dateStyle: "medium", timeStyle: "medium" })}</span>
+          <span className="text-ink2">{t[CLASS_KEY[one.cls]]}</span>
+        </div>
+      )}
+      {flagged > 0 && (
+        <p className="mt-2 text-[12px] font-semibold text-status-critical">
+          {n === 1 ? t.delFlaggedNote : fill(t.delFlaggedCount, { n: flagged })}
+        </p>
+      )}
+      {needsTyping && (
+        <label className="mt-3 flex flex-col gap-1 text-xs text-ink2">
+          {fill(t.delTypeToConfirm, { word: t.delWord })}
+          <input value={confirm} onChange={(e) => setConfirm(e.target.value)} disabled={busy} autoComplete="off" className={field} />
+        </label>
+      )}
       {error && <p className="mt-2 text-[12px] text-status-critical">{error}</p>}
       <div className="mt-5 flex justify-end gap-2">
         <button onClick={onClose} disabled={busy} className={quiet}>{t.cancel}</button>
-        <button onClick={run} disabled={busy} className={danger}>{busy ? t.delWorking : t.delOneBtn}</button>
+        <button onClick={run} disabled={busy || !ready} className={danger}>
+          {busy ? t.delWorking : n === 1 ? t.delOneBtn : fill(t.delConfirmBtn, { n })}
+        </button>
       </div>
     </Modal>
   );

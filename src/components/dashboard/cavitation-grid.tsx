@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { Cavitation, CavitationSummary } from "@/lib/types";
 import type { Strings } from "@/lib/dashboard/i18n";
 import { CLASS_KEY } from "@/lib/dashboard/cavitation";
@@ -11,7 +12,7 @@ import { FlagMark, Segmented, relTime } from "./ui";
 // straight to the full analysis dialog for it, same shortcut people expect from a file grid.
 export default function CavitationGrid({
   items, summary, filter, onFilter, hasMore, onOlder, scopedToRange,
-  selectedId, onSelect, onOpen, onManage, t, locale, advanced,
+  selectedId, onSelect, onOpen, onManage, selection, onSelection, onDeleteSelection, t, locale, advanced,
 }: {
   items: Cavitation[]; summary: CavitationSummary | null;
   filter: CavitationFilter; onFilter: (f: CavitationFilter) => void;
@@ -21,11 +22,49 @@ export default function CavitationGrid({
   selectedId: number | null; onSelect: (id: number) => void; onOpen: () => void;
   // Owners only (undefined for everyone else): opens the delete-captures dialog.
   onManage?: () => void;
+  // Owners only (all three undefined for everyone else): Ctrl/Cmd-click toggles a card,
+  // Shift-click selects a range, and a bar with a Delete button appears while any are selected.
+  selection?: ReadonlySet<number>;
+  onSelection?: (s: Set<number>) => void;
+  onDeleteSelection?: () => void;
   t: Strings; locale: string | undefined;
   // Off by default: hides raw mV/kHz numbers on each card and disables the
   // double-click shortcut into the full-analysis dialog. See settings-oscilloscope.tsx.
   advanced: boolean;
 }) {
+  const multi = !!onSelection;
+  const picked = selection ?? new Set<number>();
+  const anchor = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!picked.size) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onSelection?.(new Set()); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [picked.size, onSelection]);
+
+  function click(e: React.MouseEvent, id: number) {
+    if (multi && (e.metaKey || e.ctrlKey)) {
+      const next = new Set(picked);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      anchor.current = id;
+      onSelection!(next);
+      return;
+    }
+    if (multi && e.shiftKey) {
+      const from = items.findIndex((c) => c.id === (anchor.current ?? selectedId));
+      const to = items.findIndex((c) => c.id === id);
+      if (from !== -1 && to !== -1) {
+        const [a, b] = from < to ? [from, to] : [to, from];
+        onSelection!(new Set(items.slice(a, b + 1).map((c) => c.id)));
+        return;
+      }
+    }
+    if (picked.size) onSelection?.(new Set());
+    anchor.current = id;
+    onSelect(id);
+  }
+
   const tiles: [string, string][] = [
     [t.cavLast24h, String(summary?.last_24h ?? 0)],
     [t.cavLast7d, String(summary?.last_7d ?? 0)],
@@ -50,6 +89,22 @@ export default function CavitationGrid({
         </div>
       </div>
 
+      {picked.size > 0 && (
+        <div className="sticky top-0 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-accent bg-surface px-3 py-2 text-xs shadow">
+          <span className="font-semibold">{t.delSelectedCount.replace("{n}", String(picked.size))}</span>
+          <button onClick={() => onSelection?.(new Set(items.map((c) => c.id)))} className="font-semibold text-accent">
+            {t.delSelectShown.replace("{n}", String(items.length))}
+          </button>
+          <button onClick={() => onSelection?.(new Set())} className="text-ink2 hover:text-ink">{t.delClear}</button>
+          <button
+            onClick={onDeleteSelection}
+            className="ml-auto rounded-lg bg-status-critical px-3 py-1.5 font-semibold text-white"
+          >
+            {t.delBarDelete.replace("{n}", String(picked.size))}
+          </button>
+        </div>
+      )}
+
       {!items.length ? (
         <div className="rounded-[10px] border border-dashed border-border px-3.5 py-10 text-center text-[12.5px] text-ink2">
           {filter === "flagged" ? t.cavNoneFlagged : scopedToRange ? t.cavNoneInRange : t.cavNone}
@@ -61,11 +116,14 @@ export default function CavitationGrid({
             return (
             <button
               key={c.id}
-              onClick={() => onSelect(c.id)}
+              onClick={(e) => click(e, c.id)}
               onDoubleClick={() => { onSelect(c.id); if (advanced) onOpen(); }}
               aria-current={c.id === selectedId}
-              className={`flex flex-col gap-1.5 rounded-lg border px-3 py-2.5 text-left text-xs ${
-                c.id === selectedId ? "border-accent bg-surface-2" : "border-border hover:bg-surface-2"
+              aria-pressed={multi ? picked.has(c.id) : undefined}
+              className={`flex select-none flex-col gap-1.5 rounded-lg border px-3 py-2.5 text-left text-xs ${
+                picked.has(c.id)
+                  ? "border-accent bg-accent-soft ring-1 ring-accent"
+                  : c.id === selectedId ? "border-accent bg-surface-2" : "border-border hover:bg-surface-2"
               }`}
             >
               <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
@@ -91,6 +149,7 @@ export default function CavitationGrid({
         </button>
       )}
       <div className="text-[11px] text-ink2">{t.cavClsHint}</div>
+      {multi && !picked.size && <div className="text-[11px] text-ink2">{t.delSelectHint}</div>}
       {onManage && (
         <div className="mt-6 border-t border-border pt-2">
           <button onClick={onManage} className="text-[11px] text-ink2 underline decoration-dotted underline-offset-2 hover:text-status-critical">
