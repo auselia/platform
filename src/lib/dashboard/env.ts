@@ -17,8 +17,6 @@ export const ENV_KEYS: {
   fmt: (v: number) => string;
   // no hardware for this variable anywhere yet
   never?: boolean;
-  // not calibrated on the live pot yet (load cell)
-  liveOff?: boolean;
 }[] = [
   { key: "moisture", fmt: (v) => v.toFixed(0) + "%" },
   { key: "roottemp", fmt: (v) => v.toFixed(1) + "°C" },
@@ -27,7 +25,7 @@ export const ENV_KEYS: {
   { key: "pressure", fmt: (v) => v.toFixed(0) + " hPa" },
   { key: "ph", fmt: (v) => v.toFixed(2), never: true },
   { key: "ec", fmt: (v) => v.toFixed(2) + " mS", never: true },
-  { key: "weight", fmt: (v) => v.toFixed(2) + "kg", liveOff: true },
+  { key: "weight", fmt: (v) => v.toFixed(2) + "kg" },
   { key: "light", fmt: (v) => v.toFixed(0), never: true },
 ];
 

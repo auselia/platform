@@ -281,7 +281,7 @@ export default function TabShell({
 
               <div className="grid grid-cols-2 gap-2">
                 {ENV_KEYS.map((v) => {
-                  const unavailable = v.never || (v.liveOff && isLive);
+                  const unavailable = v.never;
                   const last = unavailable ? null : lastNonNull(env[v.key]);
                   const base = "rounded-[10px] border-[1.5px] px-[11px] py-[9px] text-left";
                   if (unavailable || last === null) {
