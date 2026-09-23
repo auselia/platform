@@ -34,10 +34,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <head>
         <script
-          // Runs before paint so the manual theme toggle doesn't flash the
-          // wrong theme on load. Reads the same key theme-toggle.tsx writes.
+          // Runs before paint so a manual theme choice doesn't flash the wrong theme on
+          // load. Reads the key theme-toggle.tsx writes, and drops the old misspelled
+          // key whose saved values pinned some visitors to one theme regardless of device.
           dangerouslySetInnerHTML={{
-            __html: `try{var t=localStorage.getItem('ausalia-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}`,
+            __html: `try{localStorage.removeItem('ausalia-theme');var t=localStorage.getItem('auselia-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}`,
           }}
         />
       </head>

@@ -19,24 +19,39 @@ function MoonIcon() {
   );
 }
 
+const DARK_QUERY = "(prefers-color-scheme: dark)";
+const KEY = "auselia-theme";
+
+const systemTheme = (): "light" | "dark" => (window.matchMedia(DARK_QUERY).matches ? "dark" : "light");
+
+// No stored choice means "follow the device" (the CSS does that on its own). A stored choice
+// is only kept when it differs from the device, so picking the device's own theme goes back
+// to following it, and a stale override can't pin the site to one theme forever.
 export default function ThemeToggle() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
-    const current = document.documentElement.getAttribute("data-theme");
-    if (current === "dark" || current === "light") {
-      setTheme(current);
-    } else {
-      setTheme(window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    }
+    const sync = () => {
+      const attr = document.documentElement.getAttribute("data-theme");
+      setTheme(attr === "dark" || attr === "light" ? attr : systemTheme());
+    };
+    sync();
+    const mq = window.matchMedia(DARK_QUERY);
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
   }, []);
 
   function toggle() {
     const next = theme === "dark" ? "light" : "dark";
     setTheme(next);
-    document.documentElement.setAttribute("data-theme", next);
     try {
-      localStorage.setItem("ausalia-theme", next);
+      if (next === systemTheme()) {
+        document.documentElement.removeAttribute("data-theme");
+        localStorage.removeItem(KEY);
+      } else {
+        document.documentElement.setAttribute("data-theme", next);
+        localStorage.setItem(KEY, next);
+      }
     } catch {}
   }
 

@@ -1,25 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Reading } from "@/lib/types";
 import type { Lang, Strings } from "@/lib/dashboard/i18n";
 import { dayKey } from "@/lib/dashboard/env";
 
 // A small month calendar for jumping the focus-mode chart or capture grid to a specific
-// day. Days with no readings/captures are dimmed and not clickable. The visible month only
+// day. `days` is the set of dayKey()s that have data for whatever the current tab shows
+// (readings on Environment, captures on Stress events); the rest are dimmed and not clickable. The visible month only
 // moves via the prev/next buttons, never on its own, so browsing doesn't jump under the
 // user while dayAnchor changes from clicking a day.
 export default function DayPicker({
-  rows, anchor, dayAnchor, onDayAnchor, t, lang,
+  days, anchor, dayAnchor, onDayAnchor, t, lang,
 }: {
-  rows: Reading[]; anchor: number; dayAnchor: Date | null;
+  days: ReadonlySet<string>; anchor: number; dayAnchor: Date | null;
   onDayAnchor: (d: Date) => void; t: Strings; lang: Lang;
 }) {
   const selected = dayAnchor ?? new Date(anchor);
   const [view, setView] = useState(() => ({ y: selected.getFullYear(), m: selected.getMonth() }));
   const locale = lang === "es" ? "es-CL" : undefined;
 
-  const hasData = useMemo(() => new Set(rows.map((r) => dayKey(new Date(r.ts)))), [rows]);
   const selKey = dayKey(selected);
   const todayKey = dayKey(new Date());
 
@@ -59,7 +58,7 @@ export default function DayPicker({
         {cells.map((d, i) => {
           if (!d) return <span key={i} />;
           const k = dayKey(d);
-          const has = hasData.has(k);
+          const has = days.has(k);
           const isSelected = k === selKey;
           const isToday = k === todayKey;
           return (

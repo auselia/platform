@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { IrrigationConfig, Reading, Role } from "@/lib/types";
 import type { Lang, Strings } from "@/lib/dashboard/i18n";
 import type { EnvKey, EnvSeries, Range } from "@/lib/dashboard/env";
@@ -8,11 +8,12 @@ import type { SensorDot } from "@/lib/dashboard/sim";
 import type { Geo } from "@/lib/dashboard/geo";
 import type { DNode, PanelTab, Severity } from "@/lib/dashboard/types";
 import { useCavitationData } from "@/lib/dashboard/use-cavitation-data";
+import { useCaptureDays } from "@/lib/dashboard/use-capture-days";
 import { demoStorageGet, demoStorageSet } from "@/lib/dashboard/demo-storage";
 import { STATUS_COLOR } from "@/lib/status";
 import StatusIcon from "@/components/status-icon";
 import { StatusPill, Segmented } from "./ui";
-import { ENV_KEYS, lastNonNull } from "@/lib/dashboard/env";
+import { ENV_KEYS, dayKey, lastNonNull } from "@/lib/dashboard/env";
 import LineChart from "./line-chart";
 import DayPicker from "./day-picker";
 import GeneralTab from "./general-tab";
@@ -24,6 +25,8 @@ import SettingsNav, { type SettingsSection } from "./settings-nav";
 import SettingsPlant from "./settings-plant";
 import SettingsStress from "./settings-stress";
 import type { Layout } from "./map-view";
+
+const NO_DAYS: ReadonlySet<string> = new Set();
 
 // The one shell every tab renders inside. General is the farm-wide landing view (map + a
 // status-sorted plant list, no picker, no details column). Every other tab is a focused,
@@ -55,6 +58,11 @@ export default function TabShell({
 }) {
   const locale = lang === "es" ? "es-CL" : undefined;
   const cav = useCavitationData(node.id, dayAnchor, range);
+  const captureDays = useCaptureDays(cav.supabase, node.id, cav.summary?.total ?? 0);
+  const readingDays = useMemo(() => new Set(rows.map((r) => dayKey(new Date(r.ts)))), [rows]);
+  // Readings and captures live on different days, so the picker enables whichever the
+  // current tab is about.
+  const pickerDays = tab === "stress" ? (captureDays ?? NO_DAYS) : readingDays;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [section, setSection] = useState<SettingsSection>("plant");
 
@@ -194,7 +202,11 @@ export default function TabShell({
                   </button>
                 )}
               </div>
-              <DayPicker rows={rows} anchor={anchorMs} dayAnchor={dayAnchor} onDayAnchor={(d) => { onDayAnchor(d); onRange("day"); }} t={t} lang={lang} />
+              {/* Day cells are aspect-square, so without a cap the stacked (<1040px) layout
+                  stretches the calendar to the full card width and it swallows the screen. */}
+              <div className="mx-auto max-w-[19rem] min-[1040px]:max-w-none">
+                <DayPicker days={pickerDays} anchor={anchorMs} dayAnchor={dayAnchor} onDayAnchor={(d) => { onDayAnchor(d); onRange("day"); }} t={t} lang={lang} />
+              </div>
             </div>
           )}
           {isSettings && (
