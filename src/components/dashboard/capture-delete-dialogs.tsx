@@ -41,10 +41,8 @@ function summarize(t: Strings, r: DeleteResult) {
   return parts.join(" ");
 }
 
-const TYPE_TO_CONFIRM_ABOVE = 25;
-
-// One capture or a hand-picked few: a clear warning, and for larger picks the same typed
-// confirmation as the bulk dialog. Reached from the small link under a capture's details, or
+// One capture or a hand-picked few: a clear warning, and for two or more the same typed
+// confirmation as the bulk dialog (a single capture only needs the warning). Reached from the small link under a capture's details, or
 // from the bar that appears when cards are selected with Ctrl/Cmd/Shift-click.
 export function DeleteCapturesDialog({
   captures, supabase, t, locale, onClose, onDeleted,
@@ -58,7 +56,7 @@ export function DeleteCapturesDialog({
   const n = captures.length;
   const one = captures[0];
   const flagged = captures.filter((c) => c.flagged).length;
-  const needsTyping = n > TYPE_TO_CONFIRM_ABOVE;
+  const needsTyping = n > 1;
   const ready = !needsTyping || confirm.trim().toLowerCase() === t.delWord.toLowerCase();
 
   async function run() {

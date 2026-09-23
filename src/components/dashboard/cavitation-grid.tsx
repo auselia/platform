@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type { Cavitation, CavitationSummary } from "@/lib/types";
 import type { Strings } from "@/lib/dashboard/i18n";
 import { CLASS_KEY } from "@/lib/dashboard/cavitation";
+import { applyClick } from "@/lib/dashboard/capture-selection";
 import type { CavitationFilter } from "@/lib/dashboard/use-cavitation-data";
 import { FlagMark, Segmented, relTime } from "./ui";
 
@@ -44,24 +45,13 @@ export default function CavitationGrid({
   }, [picked.size, onSelection]);
 
   function click(e: React.MouseEvent, id: number) {
-    if (multi && (e.metaKey || e.ctrlKey)) {
-      const next = new Set(picked);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      anchor.current = id;
-      onSelection!(next);
-      return;
-    }
-    if (multi && e.shiftKey) {
-      const from = items.findIndex((c) => c.id === (anchor.current ?? selectedId));
-      const to = items.findIndex((c) => c.id === id);
-      if (from !== -1 && to !== -1) {
-        const [a, b] = from < to ? [from, to] : [to, from];
-        onSelection!(new Set(items.slice(a, b + 1).map((c) => c.id)));
-        return;
-      }
-    }
+    const r = applyClick(
+      items.map((c) => c.id), picked, selectedId, anchor.current, id,
+      { toggle: multi && (e.metaKey || e.ctrlKey), range: multi && e.shiftKey },
+    );
+    anchor.current = r.anchor;
+    if (r.kind === "multi") { onSelection!(r.picked); return; }
     if (picked.size) onSelection?.(new Set());
-    anchor.current = id;
     onSelect(id);
   }
 
