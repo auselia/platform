@@ -11,7 +11,7 @@ import { FlagMark, Segmented, relTime } from "./ui";
 // straight to the full analysis dialog for it, same shortcut people expect from a file grid.
 export default function CavitationGrid({
   items, summary, filter, onFilter, hasMore, onOlder, scopedToRange,
-  selectedId, onSelect, onOpen, t, locale, advanced,
+  selectedId, onSelect, onOpen, onManage, t, locale, advanced,
 }: {
   items: Cavitation[]; summary: CavitationSummary | null;
   filter: CavitationFilter; onFilter: (f: CavitationFilter) => void;
@@ -19,6 +19,8 @@ export default function CavitationGrid({
   // true when a day/range is picked: "no captures" means none in that window, not ever.
   scopedToRange: boolean;
   selectedId: number | null; onSelect: (id: number) => void; onOpen: () => void;
+  // Owners only (undefined for everyone else): opens the delete-captures dialog.
+  onManage?: () => void;
   t: Strings; locale: string | undefined;
   // Off by default: hides raw mV/kHz numbers on each card and disables the
   // double-click shortcut into the full-analysis dialog. See settings-oscilloscope.tsx.
@@ -89,6 +91,13 @@ export default function CavitationGrid({
         </button>
       )}
       <div className="text-[11px] text-ink2">{t.cavClsHint}</div>
+      {onManage && (
+        <div className="mt-6 border-t border-border pt-2">
+          <button onClick={onManage} className="text-[11px] text-ink2 underline decoration-dotted underline-offset-2 hover:text-status-critical">
+            {t.delManageLink}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

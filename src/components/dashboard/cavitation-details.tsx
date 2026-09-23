@@ -9,7 +9,7 @@ import { CLASS_KEY, nearestIndex, niceLimit, traceMv, traceTime } from "@/lib/da
 // metrics, and flag/note form. A port of the classic Cavitations tab's Viewer/Trace,
 // narrowed for the right column (2-column metric grid instead of 3).
 export default function CavitationDetails({
-  c, y, t, locale, canFlag, noFlagMessage, onFlag, onOpen, advanced,
+  c, y, t, locale, canFlag, noFlagMessage, onFlag, onOpen, onDelete, advanced,
 }: {
   c: Cavitation | null; y: number[] | undefined; t: Strings; locale: string | undefined;
   canFlag: boolean;
@@ -19,22 +19,25 @@ export default function CavitationDetails({
   noFlagMessage: string;
   onFlag: (c: Cavitation, flagged: boolean, note: string) => Promise<boolean>;
   onOpen: () => void;
+  // Owners only (undefined for everyone else): a deliberately quiet link, not a button.
+  onDelete?: () => void;
   // Off by default: hides the raw metrics grid and the full-analysis dialog
   // shortcut, keeping the waveform trace and flag/note controls. See
   // settings-oscilloscope.tsx.
   advanced: boolean;
 }) {
   if (!c) return <div className="text-xs text-ink2">{t.cavSelect}</div>;
-  return <Viewer c={c} y={y} t={t} locale={locale} canFlag={canFlag} noFlagMessage={noFlagMessage} onFlag={onFlag} onOpen={onOpen} advanced={advanced} />;
+  return <Viewer c={c} y={y} t={t} locale={locale} canFlag={canFlag} noFlagMessage={noFlagMessage} onFlag={onFlag} onOpen={onOpen} onDelete={onDelete} advanced={advanced} />;
 }
 
 function Viewer({
-  c, y, t, locale, canFlag, noFlagMessage, onFlag, onOpen, advanced,
+  c, y, t, locale, canFlag, noFlagMessage, onFlag, onOpen, onDelete, advanced,
 }: {
   c: Cavitation; y: number[] | undefined; t: Strings; locale: string | undefined; canFlag: boolean;
   noFlagMessage: string;
   onFlag: (c: Cavitation, flagged: boolean, note: string) => Promise<boolean>;
   onOpen: () => void;
+  onDelete?: () => void;
   advanced: boolean;
 }) {
   const [note, setNote] = useState(c.flag_note);
@@ -131,6 +134,14 @@ function Viewer({
         </div>
       ) : (
         <div className="text-[11.5px] text-ink2">{c.flagged && c.flag_note ? c.flag_note : noFlagMessage}</div>
+      )}
+
+      {onDelete && (
+        <div className="mt-1 border-t border-border pt-2">
+          <button onClick={onDelete} className="text-[11px] text-ink2 underline decoration-dotted underline-offset-2 hover:text-status-critical">
+            {t.delOne}
+          </button>
+        </div>
       )}
     </div>
   );

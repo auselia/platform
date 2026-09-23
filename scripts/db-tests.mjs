@@ -221,11 +221,31 @@ try {
     await as(uA, () => denied("update cavitation_captures set y = '{9}' where id = $1", [capA]));
     await as(uA, () => denied("update cavitation_captures set cls = 'weak' where id = $1", [capA]));
   });
-  await test("nobody can insert or delete captures from the client", async () => {
+  await test("nobody can insert captures from the client", async () => {
     await as(uA, () => denied(
       `insert into cavitation_captures (plant_id, capture_key, ts, cls, t0_us, t1_us, y)
        values ($1,'20260921_130000_000_ch1_00002',now(),'burst',-1,1,'{1,2}')`, [pA]));
-    await as(uA, () => denied("delete from cavitation_captures where id = $1", [capA]));
+  });
+  await test("only the owner of the org can delete its captures", async () => {
+    await as(uC, () => denied("delete from cavitation_captures where id = $1", [capA])); // editor
+    await as(uD, () => denied("delete from cavitation_captures where id = $1", [capA])); // viewer
+    await as(uB, () => denied("delete from cavitation_captures where id = $1", [capA])); // other org's owner
+    await as(null, () => denied("delete from cavitation_captures where id = $1", [capA])); // anon
+    await as(uA, () => denied("delete from cavitation_captures where id = $1", [capB]));
+    const r = await as(uA, () => client.query("delete from cavitation_captures where id = $1", [capA]));
+    eq(r.rowCount, 1);
+  });
+  await test("only the owner can delete full waveform files, only in their own org's folder", async () => {
+    for (const p of [pA, pB]) {
+      await client.query("insert into storage.objects (bucket_id, name) values ('cavitation-full', $1)", [`${p}/del.bin.gz`]);
+    }
+    // Storage blocks raw DELETEs unless this is set; the policy is what is under test.
+    await client.query("select set_config('storage.allow_delete_query', 'true', true)");
+    await as(uC, () => denied("delete from storage.objects where bucket_id = 'cavitation-full' and name = $1", [`${pA}/del.bin.gz`]));
+    await as(uD, () => denied("delete from storage.objects where bucket_id = 'cavitation-full' and name = $1", [`${pA}/del.bin.gz`]));
+    await as(uA, () => denied("delete from storage.objects where bucket_id = 'cavitation-full' and name = $1", [`${pB}/del.bin.gz`]));
+    const r = await as(uA, () => client.query("delete from storage.objects where bucket_id = 'cavitation-full' and name = $1", [`${pA}/del.bin.gz`]));
+    eq(r.rowCount, 1);
   });
   await test("A can read own full waveform files and not B's", async () => {
     for (const p of [pA, pB]) {

@@ -115,6 +115,6 @@ export function useCavitationData(plantId: string, dayAnchor: Date | null, range
     items, summary, loaded, failed, hasMore,
     filter, setFilter, visible,
     selectedId, setSelectedId, selected,
-    traces, older, saveFlag,
+    traces, older, saveFlag, reload: load,
   };
 }

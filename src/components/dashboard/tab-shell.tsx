@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { IrrigationConfig, Reading, Role } from "@/lib/types";
+import type { Cavitation, IrrigationConfig, Reading, Role } from "@/lib/types";
 import type { Lang, Strings } from "@/lib/dashboard/i18n";
 import type { EnvKey, EnvSeries, Range } from "@/lib/dashboard/env";
 import type { SensorDot } from "@/lib/dashboard/sim";
@@ -20,6 +20,7 @@ import GeneralTab from "./general-tab";
 import CavitationGrid from "./cavitation-grid";
 import CavitationDetails from "./cavitation-details";
 import CavitationDialog from "./cavitation-dialog";
+import { DeleteOneDialog, ManageCapturesDialog } from "./capture-delete-dialogs";
 import IrrigationBlock, { type IrrigationPayload } from "./irrigation-block";
 import SettingsNav, { type SettingsSection } from "./settings-nav";
 import SettingsPlant from "./settings-plant";
@@ -64,6 +65,10 @@ export default function TabShell({
   // current tab is about.
   const pickerDays = tab === "stress" ? (captureDays ?? NO_DAYS) : readingDays;
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Cavitation | null>(null);
+  // Deleting captures is Owner-only, in the app and in RLS (20260923050000_delete_captures.sql).
+  const canDelete = isLive && role === "owner";
   const [section, setSection] = useState<SettingsSection>("plant");
 
   // Off by default for everyone. Live persists the choice in localStorage, same as theme/lang.
@@ -233,6 +238,7 @@ export default function TabShell({
               items={cav.visible} summary={cav.summary} filter={cav.filter} onFilter={cav.setFilter}
               hasMore={cav.hasMore} onOlder={cav.older} scopedToRange={!!dayAnchor}
               selectedId={cav.selectedId} onSelect={cav.setSelectedId} onOpen={() => setDialogOpen(true)}
+              onManage={canDelete ? () => setManageOpen(true) : undefined}
               t={t} locale={locale} advanced={advanced}
             />
           )
@@ -244,6 +250,7 @@ export default function TabShell({
               summary={cav.summary} loaded={cav.loaded} t={t}
               advanced={advanced} onAdvanced={setAdvancedPersist}
               plantId={node.id} isLive={isLive} canEdit={canEdit}
+              onManage={canDelete ? () => setManageOpen(true) : undefined}
             />
           ) : (
             <SettingsPlant node={node} orgName={orgName} t={t} />
@@ -270,6 +277,7 @@ export default function TabShell({
             <CavitationDetails
               c={cav.selected} y={cav.selected ? cav.traces[cav.selected.id] : undefined} t={t} locale={locale}
               canFlag={canEdit} noFlagMessage={noFlagMessage} onFlag={cav.saveFlag} onOpen={() => setDialogOpen(true)} advanced={advanced}
+              onDelete={canDelete && cav.selected ? () => setDeleteTarget(cav.selected) : undefined}
             />
           ) : (
             <>
@@ -321,6 +329,19 @@ export default function TabShell({
             </>
           )}
         </div>
+      )}
+
+      {manageOpen && canDelete && (
+        <ManageCapturesDialog
+          supabase={cav.supabase} plantId={node.id} t={t} locale={locale}
+          onClose={() => setManageOpen(false)} onChanged={() => { cav.setSelectedId(null); void cav.reload(); }}
+        />
+      )}
+      {deleteTarget && canDelete && (
+        <DeleteOneDialog
+          capture={deleteTarget} supabase={cav.supabase} t={t} locale={locale}
+          onClose={() => setDeleteTarget(null)} onDeleted={() => { cav.setSelectedId(null); void cav.reload(); }}
+        />
       )}
 
       {dialogOpen && cav.selected && advanced && (

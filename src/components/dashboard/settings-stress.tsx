@@ -9,11 +9,13 @@ import { relTime } from "./ui";
 // live plant. The controls do not reach the scope: they queue commands that the lab PC picks up
 // (see scope-settings.tsx). The demo plant has no scope, so it shows status only.
 export default function SettingsStress({
-  summary, loaded, t, advanced, onAdvanced, plantId, isLive, canEdit,
+  summary, loaded, t, advanced, onAdvanced, plantId, isLive, canEdit, onManage,
 }: {
   summary: CavitationSummary | null; loaded: boolean; t: Strings;
   advanced: boolean; onAdvanced: (v: boolean) => void;
   plantId: string; isLive: boolean; canEdit: boolean;
+  // Owners only (undefined for everyone else): shows the danger zone.
+  onManage?: () => void;
 }) {
   const tiles: [string, string][] = summary ? [
     [t.cavLast24h, String(summary.last_24h)],
@@ -72,6 +74,24 @@ export default function SettingsStress({
       )}
 
       {isLive && <ScopeSettings plantId={plantId} canEdit={canEdit} t={t} />}
+
+      {onManage && (
+        <section className="mt-3 rounded-lg border border-status-critical/40">
+          <div className="border-b border-status-critical/40 px-3.5 py-2 text-[12px] font-semibold text-status-critical">{t.delSection}</div>
+          <div className="flex items-center justify-between gap-3 px-3.5 py-3">
+            <div>
+              <div className="text-[13px] font-semibold">{t.delTitle}</div>
+              <p className="mt-0.5 text-[11.5px] text-ink2">{t.delSectionHint}</p>
+            </div>
+            <button
+              onClick={onManage}
+              className="flex-none rounded-lg border border-status-critical/60 px-3 py-1.5 text-xs font-semibold text-status-critical hover:bg-status-critical/10"
+            >
+              {t.delManageBtn}
+            </button>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
