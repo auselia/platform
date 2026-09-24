@@ -2,19 +2,21 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import { safeNext } from "@/lib/security/safe-next";
+import { authErrorCode } from "@/lib/security/auth-errors";
 
 export async function login(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
-  const next = String(formData.get("next") ?? "");
+  const next = safeNext(formData.get("next"), "");
+  const captchaToken = String(formData.get("cf-turnstile-response") ?? "") || undefined;
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } });
 
   if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}${next ? `&next=${encodeURIComponent(next)}` : ""}`);
+    redirect(`/login?error=${authErrorCode(error, "invalid_credentials")}${next ? `&next=${encodeURIComponent(next)}` : ""}`);
   }
 
-  // Guard against an open redirect via a crafted `next` - only ever a same-origin path.
-  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard");
+  redirect(next || "/dashboard");
 }

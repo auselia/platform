@@ -2,25 +2,33 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import { siteUrl } from "@/lib/security/site-url";
+import { safeNext } from "@/lib/security/safe-next";
+import { authErrorCode } from "@/lib/security/auth-errors";
 
 export async function signup(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
-  const orgName = String(formData.get("orgName") ?? "").trim();
-  const rawNext = String(formData.get("next") ?? "");
-  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "";
+  const orgName = String(formData.get("orgName") ?? "").trim().slice(0, 200);
+  const next = safeNext(formData.get("next"), "");
+  const captchaToken = String(formData.get("cf-turnstile-response") ?? "") || undefined;
+  const nextQuery = next ? `&next=${encodeURIComponent(next)}` : "";
+
+  if (password.length < 10) redirect(`/signup?error=weak_password${nextQuery}`);
 
   const supabase = await createClient();
-  const origin = (await headers()).get("origin");
+  const origin = await siteUrl();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: next ? { emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}` } : undefined,
+    options: {
+      captchaToken,
+      ...(next ? { emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}` } : {}),
+    },
   });
 
   if (error) {
-    redirect(`/signup?error=${encodeURIComponent(error.message)}${next ? `&next=${encodeURIComponent(next)}` : ""}`);
+    redirect(`/signup?error=${authErrorCode(error, "signup_failed")}${nextQuery}`);
   }
 
   // No session yet means this project requires email confirmation - there's
@@ -42,7 +50,8 @@ export async function signup(formData: FormData) {
     .insert({ id: orgId, name: orgName || `${email}'s workspace` });
 
   if (orgError) {
-    redirect(`/signup?error=${encodeURIComponent(orgError.message)}`);
+    console.error("signup: org insert failed", orgError);
+    redirect("/signup?error=generic");
   }
 
   const { error: memberError } = await supabase.from("memberships").insert({
@@ -52,7 +61,8 @@ export async function signup(formData: FormData) {
   });
 
   if (memberError) {
-    redirect(`/signup?error=${encodeURIComponent(memberError.message)}`);
+    console.error("signup: membership insert failed", memberError);
+    redirect("/signup?error=generic");
   }
 
   redirect(next || "/dashboard");
