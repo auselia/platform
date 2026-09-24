@@ -54,7 +54,7 @@ export default function ShareDialog({
     setSending(true);
     setFormError("");
     setFormOk(false);
-    const r = await createInvite({ orgId, email, role: inviteRole, orgName, lang });
+    const r = await createInvite({ orgId, email, role: inviteRole, lang });
     setSending(false);
     if (r.ok) {
       setFormOk(true);
@@ -108,7 +108,7 @@ export default function ShareDialog({
                       key={inv.id} inv={inv} t={t}
                       onRevoke={async () => { await revokeInvite(inv.id, lang); await load(); }}
                       onResend={async () => {
-                        const r = await resendInvite({ inviteId: inv.id, orgId, orgName, email: inv.email, role: inv.role as "editor" | "viewer", lang });
+                        const r = await resendInvite({ inviteId: inv.id, lang });
                         await load();
                         return r;
                       }}

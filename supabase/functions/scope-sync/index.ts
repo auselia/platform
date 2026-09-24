@@ -36,6 +36,9 @@ export default {
     const device = await authenticateDevice(req, ctx.supabaseAdmin);
     if (!device) return jsonResponse({ error: "invalid or missing X-Api-Key" }, 401);
 
+    if (Number(req.headers.get("content-length") ?? "0") > MAX_STATE_BYTES) {
+      return jsonResponse({ error: "body too large" }, 413);
+    }
     const raw = await req.text();
     if (raw.length > MAX_STATE_BYTES) return jsonResponse({ error: "body too large" }, 413);
     let body: Record<string, unknown>;

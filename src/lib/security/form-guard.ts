@@ -7,7 +7,7 @@ const MIN_MS = 2500;
 const MAX_MS = 6 * 3600 * 1000;
 
 function secret() {
-  return process.env.FORM_GUARD_SECRET ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? "dev-only-form-guard";
+  return process.env.FORM_GUARD_SECRET ?? "dev-only-form-guard";
 }
 const sign = (ts: string) => createHmac("sha256", secret()).update(ts).digest("hex");
 
