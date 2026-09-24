@@ -121,6 +121,18 @@ export default {
       return jsonResponse({ error: "insert failed" }, 500);
     }
 
+    // Captures an owner deleted in the last 24 hours are still in the table, hidden. Their rows
+    // already swallow a re-send (ignoreDuplicates above); make sure the re-send cannot bring the
+    // waveform file back either.
+    const sentKeys = (items as Record<string, unknown>[]).map((it) => String(it?.key ?? "")).filter(Boolean);
+    const { data: hiddenRows } = await ctx.supabaseAdmin
+      .from("cavitation_captures")
+      .select("capture_key")
+      .eq("plant_id", device.plantId)
+      .not("deleted_at", "is", null)
+      .in("capture_key", sentKeys);
+    const hiddenKeys = new Set((hiddenRows ?? []).map((r: { capture_key: string }) => r.capture_key));
+
     // Full waveforms. Also runs for captures that already existed, so old rows get backfilled.
     // A failure here does not fail the batch: the metrics are already saved, and the uploader retries next start.
     let full = 0;
@@ -128,6 +140,7 @@ export default {
     for (const it of items as Record<string, unknown>[]) {
       if (typeof it?.full_b64 !== "string") continue;
       const key = String(it.key ?? "");
+      if (hiddenKeys.has(key)) continue;
       const scale = toScale(it.scale);
       if (!rows.some((r) => r.capture_key === key) || !scale) { fullFailed.push(`${key}: bad full waveform`); continue; }
       try {

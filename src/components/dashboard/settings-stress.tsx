@@ -9,13 +9,15 @@ import { relTime } from "./ui";
 // live plant. The controls do not reach the scope: they queue commands that the lab PC picks up
 // (see scope-settings.tsx). The demo plant has no scope, so it shows status only.
 export default function SettingsStress({
-  summary, loaded, t, advanced, onAdvanced, plantId, isLive, canEdit, onManage,
+  summary, loaded, t, advanced, onAdvanced, plantId, isLive, canEdit, onManage, recentlyDeleted,
 }: {
   summary: CavitationSummary | null; loaded: boolean; t: Strings;
   advanced: boolean; onAdvanced: (v: boolean) => void;
   plantId: string; isLive: boolean; canEdit: boolean;
   // Owners only (undefined for everyone else): shows the danger zone.
   onManage?: () => void;
+  // Owners only: the Recently deleted list, shown just above the danger zone.
+  recentlyDeleted?: React.ReactNode;
 }) {
   const tiles: [string, string][] = summary ? [
     [t.cavLast24h, String(summary.last_24h)],
@@ -74,6 +76,8 @@ export default function SettingsStress({
       )}
 
       {isLive && <ScopeSettings plantId={plantId} canEdit={canEdit} t={t} />}
+
+      {recentlyDeleted}
 
       {onManage && (
         <section className="mt-3 rounded-lg border border-status-critical/40">

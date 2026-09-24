@@ -20,7 +20,10 @@ import GeneralTab from "./general-tab";
 import CavitationGrid from "./cavitation-grid";
 import CavitationDetails from "./cavitation-details";
 import CavitationDialog from "./cavitation-dialog";
-import { DeleteCapturesDialog, ManageCapturesDialog } from "./capture-delete-dialogs";
+import { DeleteCapturesDialog, ManageCapturesDialog, fill } from "./capture-delete-dialogs";
+import UndoToast, { type ToastState } from "./undo-toast";
+import RecentlyDeleted from "./recently-deleted";
+import { purge, undo, type DeleteOutcome } from "@/lib/dashboard/cavitation-delete";
 import IrrigationBlock, { type IrrigationPayload } from "./irrigation-block";
 import SettingsNav, { type SettingsSection } from "./settings-nav";
 import SettingsPlant from "./settings-plant";
@@ -68,8 +71,31 @@ export default function TabShell({
   const [manageOpen, setManageOpen] = useState(false);
   const [deleteBatch, setDeleteBatch] = useState<Cavitation[] | null>(null);
   const [selection, setSelection] = useState<Set<number>>(new Set());
-  // Deleting captures is Owner-only, in the app and in RLS (20260923050000_delete_captures.sql).
+  // Deleting captures is Owner-only, in the app and in the database functions
+  // (20260923060000_soft_delete_captures.sql).
   const canDelete = isLive && role === "owner";
+  const [toast, setToast] = useState<ToastState | null>(null);
+  const [deletedTick, setDeletedTick] = useState(0);
+  const say = (message: string, onUndo?: ToastState["onUndo"]) => setToast({ id: Date.now(), message, onUndo });
+  const refreshCaptures = () => { setSelection(new Set()); cav.setSelectedId(null); void cav.reload(); setDeletedTick((n) => n + 1); };
+  const restoredMessage = (n: number) => (n === 1 ? t.delRestoredOne : fill(t.delRestoredMany, { n }));
+  const announceDeleted = (o: DeleteOutcome) => {
+    refreshCaptures();
+    const token = o.undo;
+    say(
+      o.count === 1 ? t.delToastOne : fill(t.delToastMany, { n: o.count }),
+      token ? async () => {
+        const n = await undo(cav.supabase, token);
+        refreshCaptures();
+        say(n ? restoredMessage(n) : t.delRestoreFailed);
+      } : undefined,
+    );
+  };
+  const announceRestored = (n: number) => { refreshCaptures(); if (n > 0) say(restoredMessage(n)); };
+  // Captures deleted more than 24 hours ago are removed for good the next time an owner is here.
+  useEffect(() => {
+    if (canDelete) void purge(cav.supabase, node.id, { onlyExpired: true });
+  }, [canDelete, node.id, cav.supabase]);
   // A selection belongs to one plant/window/tab; do not carry it over to another view.
   useEffect(() => { setSelection(new Set()); }, [node.id, dayAnchor, range, tab]);
   const [section, setSection] = useState<SettingsSection>("plant");
@@ -256,6 +282,12 @@ export default function TabShell({
               advanced={advanced} onAdvanced={setAdvancedPersist}
               plantId={node.id} isLive={isLive} canEdit={canEdit}
               onManage={canDelete ? () => setManageOpen(true) : undefined}
+              recentlyDeleted={canDelete ? (
+                <RecentlyDeleted
+                  supabase={cav.supabase} plantId={node.id} refreshKey={deletedTick} t={t} locale={locale}
+                  onChanged={announceRestored}
+                />
+              ) : undefined}
             />
           ) : (
             <SettingsPlant node={node} orgName={orgName} t={t} />
@@ -339,16 +371,17 @@ export default function TabShell({
       {manageOpen && canDelete && (
         <ManageCapturesDialog
           supabase={cav.supabase} plantId={node.id} t={t} locale={locale}
-          onClose={() => setManageOpen(false)} onChanged={() => { setSelection(new Set()); cav.setSelectedId(null); void cav.reload(); }}
+          onClose={() => setManageOpen(false)} onDeleted={announceDeleted}
         />
       )}
       {deleteBatch && deleteBatch.length > 0 && canDelete && (
         <DeleteCapturesDialog
-          captures={deleteBatch} supabase={cav.supabase} t={t} locale={locale}
-          onClose={() => setDeleteBatch(null)}
-          onDeleted={() => { setSelection(new Set()); cav.setSelectedId(null); void cav.reload(); }}
+          captures={deleteBatch} plantId={node.id} supabase={cav.supabase} t={t} locale={locale}
+          onClose={() => setDeleteBatch(null)} onDeleted={announceDeleted}
         />
       )}
+
+      {toast && <UndoToast key={toast.id} toast={toast} onClose={() => setToast(null)} t={t} />}
 
       {dialogOpen && cav.selected && advanced && (
         <CavitationDialog

@@ -226,14 +226,47 @@ try {
       `insert into cavitation_captures (plant_id, capture_key, ts, cls, t0_us, t1_us, y)
        values ($1,'20260921_130000_000_ch1_00002',now(),'burst',-1,1,'{1,2}')`, [pA]));
   });
-  await test("only the owner of the org can delete its captures", async () => {
-    await as(uC, () => denied("delete from cavitation_captures where id = $1", [capA])); // editor
-    await as(uD, () => denied("delete from cavitation_captures where id = $1", [capA])); // viewer
-    await as(uB, () => denied("delete from cavitation_captures where id = $1", [capA])); // other org's owner
-    await as(null, () => denied("delete from cavitation_captures where id = $1", [capA])); // anon
-    await as(uA, () => denied("delete from cavitation_captures where id = $1", [capB]));
-    const r = await as(uA, () => client.query("delete from cavitation_captures where id = $1", [capA]));
-    eq(r.rowCount, 1);
+  const del = (uid, ids) => as(uid, () => client.query("select soft_delete_captures($1::bigint[]) as r", [ids]));
+  const hidden = async (uid, plant) => (await as(uid, () => client.query("select count(*)::int as n from cavitation_captures where plant_id = $1", [plant]))).rows[0].n;
+  await test("only the owner of the org can delete (hide) its captures", async () => {
+    for (const u of [uC, uD, uB]) eq((await del(u, [capA])).rows[0].r.count, 0, "non-owner hid a capture"); // editor, viewer, other org's owner
+    await client.query("savepoint anon_try");
+    try { await del(null, [capA]); throw new Error("anon could call soft_delete_captures"); }
+    catch (e) { if (e.code !== "42501") throw e; }
+    await client.query("rollback to savepoint anon_try");
+    eq((await del(uA, [capB])).rows[0].r.count, 0, "owner hid another org's capture");
+    eq((await del(uA, [capA])).rows[0].r.count, 1);
+  });
+  await test("hidden captures disappear for everyone, including the summary, and only the owner can list them", async () => {
+    await del(uA, [capA]);
+    eq(await hidden(uA, pA), 0);
+    eq(await hidden(uC, pA), 0);
+    eq((await as(uA, () => client.query("select total from cavitation_summary where plant_id = $1", [pA]))).rowCount, 0);
+    eq((await as(uA, () => client.query("select id from list_deleted_captures($1)", [pA]))).rows.map((r) => r.id), [capA]);
+    eq((await as(uC, () => client.query("select id from list_deleted_captures($1)", [pA]))).rowCount, 0);
+  });
+  await test("only the owner can restore, and undo by timestamp brings back exactly that delete", async () => {
+    const r = (await del(uA, [capA])).rows[0].r;
+    eq((await as(uC, () => client.query("select restore_captures($1) as n", [pA]))).rows[0].n, 0);
+    eq((await as(uA, () => client.query("select restore_captures($1, null, $2::timestamptz) as n", [pA, r.at]))).rows[0].n, 1);
+    eq(await hidden(uA, pA), 1);
+  });
+  await test("delete everything matching hides unflagged captures in one call and keeps flagged ones unless asked", async () => {
+    await client.query("update cavitation_captures set flagged = true where id = $1", [capA]);
+    eq((await as(uB, () => client.query("select soft_delete_captures_matching($1) as r", [pA]))).rows[0].r.count, 0, "other org");
+    eq((await as(uA, () => client.query("select soft_delete_captures_matching($1) as r", [pA]))).rows[0].r.count, 0, "flagged must be kept");
+    eq((await as(uA, () => client.query("select soft_delete_captures_matching($1, null, null, true) as r", [pA]))).rows[0].r.count, 1);
+  });
+  await test("purge removes only what passed the 24 hour hold, only for the owner, and returns the file paths", async () => {
+    await client.query("update cavitation_captures set full_path = $2 where id = $1", [capA, `${pA}/gone.bin.gz`]);
+    await del(uA, [capA]);
+    eq((await as(uA, () => client.query("select * from purge_captures($1, null, true)", [pA]))).rowCount, 0, "still in the hold");
+    await client.query("update cavitation_captures set deleted_at = now() - interval '25 hours' where id = $1", [capA]);
+    eq((await as(uC, () => client.query("select * from purge_captures($1, null, true)", [pA]))).rowCount, 0, "editor");
+    eq((await as(uA, () => client.query("select full_path from purge_captures($1, null, true)", [pA]))).rows.map((r) => r.full_path), [`${pA}/gone.bin.gz`]);
+  });
+  await test("nobody can delete capture rows directly any more", async () => {
+    await as(uA, () => denied("delete from cavitation_captures where id = $1", [capA]));
   });
   await test("only the owner can delete full waveform files, only in their own org's folder", async () => {
     for (const p of [pA, pB]) {

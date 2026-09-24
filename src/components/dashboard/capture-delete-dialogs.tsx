@@ -1,28 +1,36 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Cavitation } from "@/lib/types";
 import type { Strings } from "@/lib/dashboard/i18n";
 import { CLASS_KEY } from "@/lib/dashboard/cavitation";
 import {
   countMatching, deleteIds, deleteMatching, listMatching,
-  type CaptureFilter, type CaptureRow, type DeleteResult,
+  type CaptureFilter, type CaptureRow, type DeleteOutcome,
 } from "@/lib/dashboard/cavitation-delete";
 import { FlagMark } from "./ui";
 
 const LIST_LIMIT = 100;
-const fill = (s: string, v: Record<string, string | number>) =>
+export const fill = (s: string, v: Record<string, string | number>) =>
   Object.entries(v).reduce((acc, [k, x]) => acc.replaceAll(`{${k}}`, String(x)), s);
-
 // Pick the singular string for exactly one, the plural otherwise.
 const plural = (n: number, many: string, one: string, shown: string | number = n) => fill(n === 1 ? one : many, { n: shown });
 
-const danger = "rounded-lg bg-status-critical px-3.5 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45";
-const quiet = "rounded-lg border border-border px-3.5 py-2 text-xs font-semibold text-ink disabled:opacity-45";
+export const danger = "rounded-lg bg-status-critical px-3.5 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45";
+export const quiet = "rounded-lg border border-border px-3.5 py-2 text-xs font-semibold text-ink disabled:opacity-45";
 const field = "rounded-lg border border-border bg-bg px-2.5 py-1.5 text-xs text-ink";
+const warnBox = "rounded-lg border border-status-critical/40 bg-status-critical/10 px-3 py-2 text-[12.5px] text-ink";
 
-function Modal({ children, onClose, locked }: { children: React.ReactNode; onClose: () => void; locked: boolean }) {
+// Esc and a click outside close it (never while a delete is running). Cancel takes focus when
+// the dialog opens, so pressing Enter or Space can never confirm a destructive action by accident.
+export function Modal({ children, onClose, locked }: { children: React.ReactNode; onClose: () => void; locked: boolean }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !locked) onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [locked, onClose]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-5" onClick={() => { if (!locked) onClose(); }}>
       <div
@@ -36,22 +44,25 @@ function Modal({ children, onClose, locked }: { children: React.ReactNode; onClo
   );
 }
 
-function summarize(t: Strings, r: DeleteResult) {
-  if (r.failed && r.deleted === 0) return t.delFailed;
-  const parts = [r.stopped ? fill(t.delStopped, { n: r.deleted }) : plural(r.deleted, t.delDone, t.delDoneOne)];
-  if (r.filesLeft) parts.push(plural(r.filesLeft, t.delFilesLeft, t.delFilesLeftOne));
-  if (r.failed) parts.push(t.delFailed);
-  return parts.join(" ");
+function TypeToConfirm({ t, value, onChange, disabled }: { t: Strings; value: string; onChange: (v: string) => void; disabled: boolean }) {
+  return (
+    <label className="flex flex-col gap-1 text-xs text-ink2">
+      {fill(t.delTypeToConfirm, { word: t.delWord })}
+      <input value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} autoComplete="off" className={field} />
+    </label>
+  );
 }
 
+const typedOk = (t: Strings, v: string) => v.trim().toLowerCase() === t.delWord.toLowerCase();
+
 // One capture or a hand-picked few: a clear warning, and for two or more the same typed
-// confirmation as the bulk dialog (a single capture only needs the warning). Reached from the small link under a capture's details, or
-// from the bar that appears when cards are selected with Ctrl/Cmd/Shift-click.
+// confirmation as the bulk dialog (a single capture only needs the warning). Reached from the
+// red button under a capture's details, or from the bar that appears when cards are selected.
 export function DeleteCapturesDialog({
-  captures, supabase, t, locale, onClose, onDeleted,
+  captures, plantId, supabase, t, locale, onClose, onDeleted,
 }: {
-  captures: Cavitation[]; supabase: SupabaseClient; t: Strings; locale: string | undefined;
-  onClose: () => void; onDeleted: () => void;
+  captures: Cavitation[]; plantId: string; supabase: SupabaseClient; t: Strings; locale: string | undefined;
+  onClose: () => void; onDeleted: (o: DeleteOutcome) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -60,14 +71,14 @@ export function DeleteCapturesDialog({
   const one = captures[0];
   const flagged = captures.filter((c) => c.flagged).length;
   const needsTyping = n > 1;
-  const ready = !needsTyping || confirm.trim().toLowerCase() === t.delWord.toLowerCase();
+  const ready = !needsTyping || typedOk(t, confirm);
 
   async function run() {
     setBusy(true);
     setError("");
-    const r = await deleteIds(supabase, captures.map((c) => c.id));
-    if (r.failed) { setBusy(false); setError(r.deleted ? summarize(t, r) : t.delFailed); if (r.deleted) onDeleted(); return; }
-    onDeleted();
+    const o = await deleteIds(supabase, plantId, captures.map((c) => c.id));
+    if (o.failed && !o.count) { setBusy(false); setError(t.delFailed); return; }
+    onDeleted(o);
     onClose();
   }
 
@@ -76,9 +87,7 @@ export function DeleteCapturesDialog({
       <h3 className="m-0 font-[family-name:var(--font-display)] text-[17px] font-semibold">
         {n === 1 ? t.delOneTitle : fill(t.delSelTitle, { n })}
       </h3>
-      <p className="mt-2 rounded-lg border border-status-critical/40 bg-status-critical/10 px-3 py-2 text-[12.5px] text-ink">
-        {n === 1 ? t.delOneWarn : fill(t.delSelWarn, { n })}
-      </p>
+      <p className={`mt-2 ${warnBox}`}>{n === 1 ? t.delOneWarn : fill(t.delSelWarn, { n })}</p>
       {n === 1 && one && (
         <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-xs">
           <span>{new Date(one.ts).toLocaleString(locale, { dateStyle: "medium", timeStyle: "medium" })}</span>
@@ -90,15 +99,10 @@ export function DeleteCapturesDialog({
           {n === 1 ? t.delFlaggedNote : plural(flagged, t.delFlaggedCount, t.delFlaggedCountOne)}
         </p>
       )}
-      {needsTyping && (
-        <label className="mt-3 flex flex-col gap-1 text-xs text-ink2">
-          {fill(t.delTypeToConfirm, { word: t.delWord })}
-          <input value={confirm} onChange={(e) => setConfirm(e.target.value)} disabled={busy} autoComplete="off" className={field} />
-        </label>
-      )}
+      {needsTyping && <div className="mt-3"><TypeToConfirm t={t} value={confirm} onChange={setConfirm} disabled={busy} /></div>}
       {error && <p className="mt-2 text-[12px] text-status-critical">{error}</p>}
       <div className="mt-5 flex justify-end gap-2">
-        <button onClick={onClose} disabled={busy} className={quiet}>{t.cancel}</button>
+        <button onClick={onClose} disabled={busy} autoFocus className={quiet}>{t.cancel}</button>
         <button onClick={run} disabled={busy || !ready} className={danger}>
           {busy ? t.delWorking : n === 1 ? t.delOneBtn : plural(n, t.delConfirmBtn, t.delConfirmBtnOne)}
         </button>
@@ -108,13 +112,13 @@ export function DeleteCapturesDialog({
 }
 
 // Many at once: filter by time, tick individual captures or take everything that matches
-// (the flood case), then confirm by typing a word. Flagged captures are left out unless asked
-// for, because a flag is the researcher's own record.
+// (the flood case, done in one database call), then confirm by typing a word. Flagged captures
+// are left out unless asked for, because a flag is the researcher's own record.
 export function ManageCapturesDialog({
-  supabase, plantId, t, locale, onClose, onChanged,
+  supabase, plantId, t, locale, onClose, onDeleted,
 }: {
   supabase: SupabaseClient; plantId: string; t: Strings; locale: string | undefined;
-  onClose: () => void; onChanged: () => void;
+  onClose: () => void; onDeleted: (o: DeleteOutcome) => void;
 }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -124,11 +128,8 @@ export function ManageCapturesDialog({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [allMatching, setAllMatching] = useState(false);
   const [confirm, setConfirm] = useState("");
-  const [running, setRunning] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [message, setMessage] = useState("");
-  const [reload, setReload] = useState(0);
-  const stop = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   const filter: CaptureFilter = useMemo(() => ({
     plantId,
@@ -149,12 +150,10 @@ export function ManageCapturesDialog({
       setAllMatching(false);
     }, 250);
     return () => { alive = false; clearTimeout(id); };
-  }, [supabase, filter, reload]);
+  }, [supabase, filter]);
 
   const count = allMatching ? (total ?? 0) : selected.size;
   const allShownSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
-  const word = t.delWord;
-  const confirmed = confirm.trim().toLowerCase() === word.toLowerCase();
 
   function toggle(id: number) {
     setAllMatching(false);
@@ -171,39 +170,33 @@ export function ManageCapturesDialog({
   }
 
   async function run() {
-    setRunning(true);
-    setMessage("");
-    setProgress(0);
-    stop.current = false;
-    const result = allMatching
-      ? await deleteMatching(supabase, filter, setProgress, () => stop.current)
-      : await deleteIds(supabase, [...selected], setProgress);
-    setRunning(false);
-    setConfirm("");
-    setMessage(summarize(t, result));
-    setReload((n) => n + 1);
-    onChanged();
+    setBusy(true);
+    setError("");
+    const o = allMatching ? await deleteMatching(supabase, filter) : await deleteIds(supabase, plantId, [...selected]);
+    if (o.failed && !o.count) { setBusy(false); setError(t.delFailed); return; }
+    onDeleted(o);
+    onClose();
   }
 
   return (
-    <Modal onClose={onClose} locked={running}>
+    <Modal onClose={onClose} locked={busy}>
       <div className="mb-3 flex items-center justify-between gap-2">
         <h3 className="m-0 font-[family-name:var(--font-display)] text-[17px] font-semibold">{t.delTitle}</h3>
-        <button onClick={onClose} disabled={running} aria-label={t.dlgClose} className="text-ink2 hover:text-ink">&times;</button>
+        <button onClick={onClose} disabled={busy} aria-label={t.cancel} className="text-ink2 hover:text-ink">&times;</button>
       </div>
-      <p className="mb-3 rounded-lg border border-status-critical/40 bg-status-critical/10 px-3 py-2 text-[12.5px] text-ink">{t.delWarn}</p>
+      <p className={`mb-3 ${warnBox}`}>{t.delWarn}</p>
 
       <div className="mb-2 flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 text-[10.5px] uppercase tracking-[0.04em] text-ink2">
           {t.delFrom}
-          <input type="datetime-local" value={from} onChange={(e) => setFrom(e.target.value)} disabled={running} className={field} />
+          <input type="datetime-local" value={from} onChange={(e) => setFrom(e.target.value)} disabled={busy} className={field} />
         </label>
         <label className="flex flex-col gap-1 text-[10.5px] uppercase tracking-[0.04em] text-ink2">
           {t.delTo}
-          <input type="datetime-local" value={to} onChange={(e) => setTo(e.target.value)} disabled={running} className={field} />
+          <input type="datetime-local" value={to} onChange={(e) => setTo(e.target.value)} disabled={busy} className={field} />
         </label>
         <label className="flex items-center gap-1.5 pb-1.5 text-xs text-ink">
-          <input type="checkbox" checked={includeFlagged} onChange={(e) => setIncludeFlagged(e.target.checked)} disabled={running} />
+          <input type="checkbox" checked={includeFlagged} onChange={(e) => setIncludeFlagged(e.target.checked)} disabled={busy} />
           {t.delIncludeFlagged}
         </label>
       </div>
@@ -216,7 +209,7 @@ export function ManageCapturesDialog({
         <>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border pb-1.5 text-xs">
             <label className="flex items-center gap-1.5">
-              <input type="checkbox" checked={allMatching || allShownSelected} onChange={toggleShown} disabled={running} />
+              <input type="checkbox" checked={allMatching || allShownSelected} onChange={toggleShown} disabled={busy} />
               {fill(t.delSelectShown, { n: rows.length })}
             </label>
             {allMatching ? (
@@ -225,7 +218,7 @@ export function ManageCapturesDialog({
                 <button onClick={() => { setAllMatching(false); setSelected(new Set()); }} className="font-semibold text-accent">{t.delClear}</button>
               </span>
             ) : allShownSelected && (total ?? 0) > rows.length ? (
-              <button onClick={() => setAllMatching(true)} disabled={running} className="font-semibold text-accent">
+              <button onClick={() => setAllMatching(true)} disabled={busy} className="font-semibold text-accent">
                 {fill(t.delSelectAll, { n: (total ?? 0).toLocaleString(locale) })}
               </button>
             ) : null}
@@ -234,7 +227,7 @@ export function ManageCapturesDialog({
             {rows.map((r) => (
               <li key={r.id}>
                 <label className="flex cursor-pointer items-center gap-2 border-b border-border/60 py-1.5 text-xs">
-                  <input type="checkbox" checked={allMatching || selected.has(r.id)} onChange={() => toggle(r.id)} disabled={running} />
+                  <input type="checkbox" checked={allMatching || selected.has(r.id)} onChange={() => toggle(r.id)} disabled={busy} />
                   <span className="font-mono">{new Date(r.ts).toLocaleString(locale, { dateStyle: "short", timeStyle: "medium" })}</span>
                   <span className="text-ink2">{t[CLASS_KEY[r.cls]]}</span>
                   {r.peak_mv !== null && <span className="font-mono text-ink2">{r.peak_mv} mV</span>}
@@ -246,31 +239,49 @@ export function ManageCapturesDialog({
         </>
       )}
 
-      {message && <p className="mt-3 text-xs text-ink">{message}</p>}
+      {error && <p className="mt-3 text-xs text-status-critical">{error}</p>}
 
       <div className="mt-4 flex flex-col gap-2 border-t border-border pt-3">
-        {running ? (
-          <div className="flex items-center justify-between gap-2 text-xs">
-            <span>{allMatching ? fill(t.delDeleting, { done: progress, total: total ?? "?" }) : fill(t.delDeleting, { done: progress, total: count })}</span>
-            <button onClick={() => { stop.current = true; }} className={quiet}>{t.delStop}</button>
-          </div>
-        ) : (
-          <>
-            <label className="flex flex-col gap-1 text-xs text-ink2">
-              {fill(t.delTypeToConfirm, { word })}
-              <input
-                value={confirm} onChange={(e) => setConfirm(e.target.value)} disabled={count === 0}
-                autoComplete="off" className={field}
-              />
-            </label>
-            <div className="flex justify-end gap-2">
-              <button onClick={onClose} className={quiet}>{t.cancel}</button>
-              <button onClick={run} disabled={count === 0 || !confirmed} className={danger}>
-                {plural(count, t.delConfirmBtn, t.delConfirmBtnOne, count.toLocaleString(locale))}
-              </button>
-            </div>
-          </>
-        )}
+        <TypeToConfirm t={t} value={confirm} onChange={setConfirm} disabled={busy || count === 0} />
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} disabled={busy} autoFocus className={quiet}>{t.cancel}</button>
+          <button onClick={run} disabled={busy || count === 0 || !typedOk(t, confirm)} className={danger}>
+            {busy ? t.delWorking : plural(count, t.delConfirmBtn, t.delConfirmBtnOne, count.toLocaleString(locale))}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// Permanent deletion from Recently deleted, skipping the 24 hour hold. Always typed: this one
+// cannot be undone.
+export function DeleteForeverDialog({
+  count, t, onClose, onConfirm,
+}: {
+  count: number; t: Strings; onClose: () => void; onConfirm: () => Promise<boolean>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [confirm, setConfirm] = useState("");
+
+  async function run() {
+    setBusy(true);
+    setError("");
+    if (await onConfirm()) { onClose(); return; }
+    setBusy(false);
+    setError(t.delFailed);
+  }
+
+  return (
+    <Modal onClose={onClose} locked={busy}>
+      <h3 className="m-0 font-[family-name:var(--font-display)] text-[17px] font-semibold">{t.rdForeverTitle}</h3>
+      <p className={`mt-2 ${warnBox}`}>{count === 1 ? t.rdForeverOne : fill(t.rdForeverWarn, { n: count })}</p>
+      <div className="mt-3"><TypeToConfirm t={t} value={confirm} onChange={setConfirm} disabled={busy} /></div>
+      {error && <p className="mt-2 text-[12px] text-status-critical">{error}</p>}
+      <div className="mt-5 flex justify-end gap-2">
+        <button onClick={onClose} disabled={busy} autoFocus className={quiet}>{t.cancel}</button>
+        <button onClick={run} disabled={busy || !typedOk(t, confirm)} className={danger}>{busy ? t.delWorking : t.rdForeverBtn}</button>
       </div>
     </Modal>
   );
