@@ -17,6 +17,8 @@
 
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 
+const MAX_KEY_LENGTH = 200;
+
 async function sha256Hex(input: string): Promise<string> {
   const data = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest("SHA-256", data);
@@ -32,7 +34,9 @@ export async function authenticateDevice(
   supabase: SupabaseClient,
 ): Promise<{ plantId: string } | null> {
   const apiKey = req.headers.get("x-api-key");
-  if (!apiKey) return null;
+  // Reject junk before it costs a database lookup (the publishable key is public, so anyone
+  // can reach this code). Length only: existing device keys must keep working as-is.
+  if (!apiKey || apiKey.length > MAX_KEY_LENGTH) return null;
 
   const hash = await sha256Hex(apiKey);
   const { data, error } = await supabase
@@ -43,6 +47,23 @@ export async function authenticateDevice(
 
   if (error || !data) return null;
   return { plantId: data.plant_id };
+}
+
+// Reads a JSON body with a hard size ceiling, checked against Content-Length first and the
+// real length after, so an oversized payload is refused before it is parsed.
+export async function readJson(
+  req: Request,
+  maxBytes: number,
+): Promise<{ ok: true; body: unknown } | { ok: false; response: Response }> {
+  const declared = Number(req.headers.get("content-length") ?? "0");
+  if (declared > maxBytes) return { ok: false, response: jsonResponse({ error: "body too large" }, 413) };
+  const raw = await req.text();
+  if (raw.length > maxBytes) return { ok: false, response: jsonResponse({ error: "body too large" }, 413) };
+  try {
+    return { ok: true, body: JSON.parse(raw) };
+  } catch {
+    return { ok: false, response: jsonResponse({ error: "invalid JSON" }, 400) };
+  }
 }
 
 export function jsonResponse(body: unknown, status = 200): Response {

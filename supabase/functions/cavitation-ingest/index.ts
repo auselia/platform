@@ -8,11 +8,14 @@
 
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "@supabase/server";
-import { authenticateDevice, jsonResponse } from "../_shared/device.ts";
+import { authenticateDevice, jsonResponse, readJson } from "../_shared/device.ts";
 
 const MAX_BATCH = 20;
 const MAX_POINTS = 4000;
 const MAX_FULL_BYTES = 1_500_000; // gzip of one capture is about 16 KB, this is a generous ceiling
+// A full batch is 20 captures, each with a base64 waveform of at most MAX_FULL_BYTES.
+const MAX_BODY = Math.ceil((MAX_FULL_BYTES * 4) / 3) * MAX_BATCH + 400_000;
+const MAX_FULL_B64 = Math.ceil((MAX_FULL_BYTES * 4) / 3) + 4;
 const BUCKET = "cavitation-full";
 const SCALE_KEYS = ["xinc", "xorig", "xref", "yinc", "yorig", "yref", "n"];
 const KEY_RE = /^\d{8}_\d{6}_\d{3}_ch\d_\d{5}$/;
@@ -92,12 +95,9 @@ export default {
     const device = await authenticateDevice(req, ctx.supabaseAdmin);
     if (!device) return jsonResponse({ error: "invalid or missing X-Api-Key" }, 401);
 
-    let payload: { captures?: unknown };
-    try {
-      payload = await req.json();
-    } catch {
-      return jsonResponse({ error: "invalid JSON" }, 400);
-    }
+    const parsed = await readJson(req, MAX_BODY);
+    if (!parsed.ok) return parsed.response;
+    const payload = (parsed.body && typeof parsed.body === "object" ? parsed.body : {}) as { captures?: unknown };
     const items = payload.captures;
     if (!Array.isArray(items) || items.length === 0 || items.length > MAX_BATCH) {
       return jsonResponse({ error: `captures must be an array of 1 to ${MAX_BATCH}` }, 400);
@@ -144,6 +144,8 @@ export default {
       const scale = toScale(it.scale);
       if (!rows.some((r) => r.capture_key === key) || !scale) { fullFailed.push(`${key}: bad full waveform`); continue; }
       try {
+        // Refuse before decoding: base64 is ~4/3 of the bytes it carries.
+        if (it.full_b64.length > MAX_FULL_B64) throw new Error("size");
         const bytes = b64ToBytes(it.full_b64);
         if (bytes.length === 0 || bytes.length > MAX_FULL_BYTES) throw new Error("size");
         const path = `${device.plantId}/${key}.bin.gz`;

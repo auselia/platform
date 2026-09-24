@@ -405,6 +405,62 @@ try {
     await as(uA, () => denied("update memberships set role = 'editor' where user_id = $1 and org_id = $2", [uA, oA]));
     await as(uA, () => denied("delete from memberships where user_id = $1 and org_id = $2", [uA, oA]));
   });
+
+  console.log("\nAbuse limits");
+  await test("anon cannot insert into contact_submissions directly, only through submit_contact()", async () => {
+    await as(null, () => denied("insert into contact_submissions (name,email,message) values ('x','x@y.co','hi')"));
+    const r = await as(null, () => client.query("select submit_contact('N', $1, '', 'hello', 'en') as r", [`c-${tag}@test.local`]));
+    eq(r.rows[0].r, "ok");
+  });
+  await test("submit_contact rejects bad email and limits per address per hour", async () => {
+    const bad = await as(null, () => client.query("select submit_contact('N','not-an-email','','hi','en') as r"));
+    eq(bad.rows[0].r, "invalid");
+    const em = `rl-${tag}@test.local`;
+    const results = [];
+    for (let i = 0; i < 4; i++) {
+      results.push((await as(null, () => client.query("select submit_contact('N',$1,'','hi','en') as r", [em]))).rows[0].r);
+    }
+    eq(results, ["ok", "ok", "ok", "rate_limited"]);
+  });
+  await test("a user cannot own more than 5 organizations", async () => {
+    const u = randomUUID();
+    await client.query("insert into auth.users (id, aud, role, email) values ($1,'authenticated','authenticated',$2)", [u, `many-${tag}@test.local`]);
+    for (let i = 0; i < 5; i++) {
+      const o = randomUUID();
+      await client.query("insert into organizations (id, name) values ($1,$2)", [o, `M-${i}-${tag}`]);
+      await client.query("insert into memberships (user_id, org_id, role) values ($1,$2,'owner')", [u, o]);
+    }
+    const o6 = randomUUID();
+    await client.query("insert into organizations (id, name) values ($1,$2)", [o6, `M-6-${tag}`]);
+    await client.query("savepoint lim");
+    let blocked = false;
+    try { await client.query("insert into memberships (user_id, org_id, role) values ($1,$2,'owner')", [u, o6]); }
+    catch (e) { blocked = e.message.includes("too_many_owned_orgs"); }
+    await client.query("rollback to savepoint lim");
+    eq(blocked, true);
+  });
+  await test("an org cannot exceed 25 plants", async () => {
+    await client.query(
+      "insert into plants (org_id, name, api_key_hash) select $1, 'bulk-'||g, md5(g::text||$2) from generate_series(1, 24) g", [oA, tag]);
+    await client.query("savepoint lim");
+    let blocked = false;
+    try { await client.query("insert into plants (org_id, name, api_key_hash) values ($1,'over',$2)", [oA, randomBytes(8).toString("hex")]); }
+    catch (e) { blocked = e.message.includes("too_many_plants"); }
+    await client.query("rollback to savepoint lim");
+    eq(blocked, true);
+  });
+  await test("an org cannot create more than 20 invitations in a day", async () => {
+    await client.query("delete from org_invitations where org_id = $1", [oA]);
+    await client.query(
+      `insert into org_invitations (org_id, email, role, invited_by)
+       select $1, 'inv'||g||'-'||$2||'@test.local', 'viewer', $3 from generate_series(1, 20) g`, [oA, tag, uA]);
+    await client.query("savepoint lim");
+    let blocked = false;
+    try { await client.query("insert into org_invitations (org_id, email, role, invited_by) values ($1,$2,'viewer',$3)", [oA, `z-${tag}@test.local`, uA]); }
+    catch (e) { blocked = e.message.includes("too_many_invitations"); }
+    await client.query("rollback to savepoint lim");
+    eq(blocked, true);
+  });
 } finally {
   await client.query("rollback");
   await client.end();

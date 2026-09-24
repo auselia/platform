@@ -70,10 +70,12 @@ export function useCavitationData(plantId: string, dayAnchor: Date | null, range
 
   useEffect(() => {
     let alive = true;
-    const run = () => { if (alive) void load(); };
+    // A background tab shouldn't keep pulling up to 500 rows every 20 s; refresh once when it's shown again.
+    const run = () => { if (alive && !document.hidden) void load(); };
     run();
     const id = setInterval(run, POLL_MS);
-    return () => { alive = false; clearInterval(id); };
+    document.addEventListener("visibilitychange", run);
+    return () => { alive = false; clearInterval(id); document.removeEventListener("visibilitychange", run); };
   }, [load]);
 
   const older = async () => {

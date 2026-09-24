@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 export async function createOrganization(formData: FormData) {
-  const orgName = String(formData.get("orgName") ?? "").trim();
+  const orgName = String(formData.get("orgName") ?? "").trim().slice(0, 200);
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -23,7 +23,8 @@ export async function createOrganization(formData: FormData) {
     .insert({ id: orgId, name: orgName || `${user!.email}'s workspace` });
 
   if (orgError) {
-    redirect(`/dashboard?error=${encodeURIComponent(orgError.message)}`);
+    console.error("createOrganization: org insert failed", orgError);
+    redirect("/dashboard?error=generic");
   }
 
   const { error: memberError } = await supabase.from("memberships").insert({
@@ -33,7 +34,8 @@ export async function createOrganization(formData: FormData) {
   });
 
   if (memberError) {
-    redirect(`/dashboard?error=${encodeURIComponent(memberError.message)}`);
+    console.error("createOrganization: membership insert failed", memberError);
+    redirect("/dashboard?error=generic");
   }
 
   revalidatePath("/dashboard");

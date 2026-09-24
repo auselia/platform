@@ -1,3 +1,5 @@
+import TurnstileWidget from "@/components/turnstile-widget";
+import { authErrorMessage } from "@/lib/security/auth-errors";
 import { login } from "./actions";
 import Link from "next/link";
 
@@ -12,9 +14,9 @@ export default async function LoginPage({
     <>
       <p className="text-sm text-ink2">Sign in to your dashboard.</p>
 
-      {error && (
+      {authErrorMessage(error) && (
         <p className="mt-4 rounded-lg border border-status-critical/40 bg-status-critical/10 px-3 py-2 text-sm text-ink">
-          {error}
+          {authErrorMessage(error)}
         </p>
       )}
 
@@ -49,6 +51,7 @@ export default async function LoginPage({
             className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
           />
         </div>
+        <TurnstileWidget />
         <button
           type="submit"
           className="mt-2 rounded-lg bg-amber px-4 py-2 text-sm font-semibold text-forest"

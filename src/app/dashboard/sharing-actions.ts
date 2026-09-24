@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { headers } from "next/headers";
+import { siteUrl } from "@/lib/security/site-url";
 import { revalidatePath } from "next/cache";
 import { STR, type Lang } from "@/lib/dashboard/i18n";
 import { sendOrgInvite } from "@/lib/dashboard/email";
@@ -16,11 +16,11 @@ import { INVITE_TTL_MS, RESEND_COOLDOWN_MS, sentAtFromExpiry } from "@/lib/dashb
 type Result = { ok: true } | { ok: false; error: string };
 
 export async function createInvite(input: {
-  orgId: string; email: string; role: "editor" | "viewer"; orgName: string; lang: Lang;
+  orgId: string; email: string; role: "editor" | "viewer"; lang: Lang;
 }): Promise<Result> {
   const t = STR[input.lang];
   const email = input.email.trim().toLowerCase();
-  if (!email) return { ok: false, error: t.shareErrorGeneric };
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || email.length > 320) return { ok: false, error: t.shareErrorGeneric };
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -36,11 +36,15 @@ export async function createInvite(input: {
     return { ok: false, error: error.code === "23505" ? t.shareErrorAlready : t.shareErrorGeneric };
   }
 
-  const origin = (await headers()).get("origin");
+  // The org name comes from the database, never from the client: it ends up in an email
+  // sent from our domain.
+  const { data: org } = await supabase.from("organizations").select("name").eq("id", input.orgId).maybeSingle();
+  const orgName = org?.name ?? "";
+  const origin = await siteUrl();
   try {
     await sendOrgInvite({
       to: email,
-      orgName: input.orgName,
+      orgName,
       inviterEmail: user.email ?? "",
       role: input.role,
       acceptUrl: `${origin}/accept-invite?token=${data.token}`,
@@ -66,7 +70,7 @@ export async function revokeInvite(inviteId: string, lang: Lang): Promise<Result
 }
 
 export async function resendInvite(input: {
-  inviteId: string; orgId: string; orgName: string; email: string; role: "editor" | "viewer"; lang: Lang;
+  inviteId: string; lang: Lang;
 }): Promise<Result> {
   const t = STR[input.lang];
   const supabase = await createClient();
@@ -75,7 +79,7 @@ export async function resendInvite(input: {
 
   const { data: current } = await supabase
     .from("org_invitations")
-    .select("expires_at")
+    .select("org_id, email, role, expires_at")
     .eq("id", input.inviteId)
     .eq("status", "pending")
     .maybeSingle();
@@ -98,13 +102,15 @@ export async function resendInvite(input: {
 
   if (error || !data) return { ok: false, error: t.shareResendWait };
 
-  const origin = (await headers()).get("origin");
+  // Recipient, role and org name all come from the stored invitation, not from the client.
+  const { data: org } = await supabase.from("organizations").select("name").eq("id", current.org_id).maybeSingle();
+  const origin = await siteUrl();
   try {
     await sendOrgInvite({
-      to: input.email,
-      orgName: input.orgName,
+      to: current.email,
+      orgName: org?.name ?? "",
       inviterEmail: user.email ?? "",
-      role: input.role,
+      role: current.role as "editor" | "viewer",
       acceptUrl: `${origin}/accept-invite?token=${data.token}`,
       lang: input.lang,
     });

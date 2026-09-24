@@ -1,3 +1,4 @@
+import { authErrorMessage } from "@/lib/security/auth-errors";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { updatePassword } from "./actions";
@@ -12,15 +13,15 @@ export default async function ResetPasswordPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login?error=Use the link from your password reset email");
+  if (!user) redirect("/login?error=expired_link");
 
   return (
     <>
       <p className="text-sm text-ink2">Choose a new password.</p>
 
-      {error && (
+      {authErrorMessage(error) && (
         <p className="mt-4 rounded-lg border border-status-critical/40 bg-status-critical/10 px-3 py-2 text-sm text-ink">
-          {error}
+          {authErrorMessage(error)}
         </p>
       )}
 
@@ -34,7 +35,7 @@ export default async function ResetPasswordPage({
             name="password"
             type="password"
             required
-            minLength={6}
+            minLength={10}
             className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-ink outline-none focus:border-accent"
           />
         </div>

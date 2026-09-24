@@ -1,3 +1,4 @@
+import { authErrorMessage } from "@/lib/security/auth-errors";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { createOrganization, logout } from "./actions";
@@ -41,9 +42,9 @@ export default async function DashboardPage({
             Name your organization
           </h1>
           <p className="mt-1 text-sm text-ink2">One more step before you see your dashboard.</p>
-          {error && (
+          {authErrorMessage(error) && (
             <p className="mt-4 rounded-lg border border-status-critical/40 bg-status-critical/10 px-3 py-2 text-sm text-ink">
-              {error}
+              {authErrorMessage(error)}
             </p>
           )}
           <form action={createOrganization} className="mt-6 flex flex-col gap-3">
