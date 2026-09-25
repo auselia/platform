@@ -28,6 +28,8 @@ import IrrigationBlock, { type IrrigationPayload } from "./irrigation-block";
 import SettingsNav, { type SettingsSection } from "./settings-nav";
 import SettingsPlant from "./settings-plant";
 import SettingsStress from "./settings-stress";
+import SettingsDevice from "./settings-device";
+import ManualPump from "./manual-pump";
 import type { Layout } from "./map-view";
 
 const NO_DAYS: ReadonlySet<string> = new Set();
@@ -43,7 +45,7 @@ export default function TabShell({
   dates, env, envVar, onEnvVar, range, onRange, loading,
   rows, anchorMs, dayAnchor, onDayAnchor, lastUpdated,
   geo, nodes, selectedId, filters, counts, onToggleFilter, onSelect, layoutFor,
-  orgName, irrigation, onSaveIrrigation, summary,
+  orgName, irrigation, onSaveIrrigation, onIrrigationChanged, summary,
 }: {
   node: DNode; t: Strings; lang: Lang; isLive: boolean;
   tab: PanelTab; onTab: (t: PanelTab) => void; canEdit: boolean; role: Role | null;
@@ -58,6 +60,7 @@ export default function TabShell({
   layoutFor: (n: DNode) => Layout;
   orgName: string; irrigation: IrrigationConfig | null;
   onSaveIrrigation: (p: IrrigationPayload) => Promise<boolean>;
+  onIrrigationChanged: (c: IrrigationConfig) => void;
   summary: string;
 }) {
   const locale = lang === "es" ? "es-CL" : undefined;
@@ -143,6 +146,7 @@ export default function TabShell({
     { id: "plant", label: t.settingsPlant },
     { id: "irrigation", label: t.settingsIrrigation },
     { id: "stress", label: t.settingsStress },
+    ...(isLive ? [{ id: "device" as const, label: t.settingsDevice }] : []),
   ];
 
   // Picking a plant from General commits straight into the focused view - no "zoom and
@@ -275,7 +279,14 @@ export default function TabShell({
           )
         ) : isSettings ? (
           section === "irrigation" ? (
-            <IrrigationBlock config={irrigation} t={t} onSave={onSaveIrrigation} canEdit={canEdit} />
+            <>
+              <IrrigationBlock config={irrigation} t={t} onSave={onSaveIrrigation} canEdit={canEdit} />
+              {isLive && canEdit && (
+                <ManualPump supabase={cav.supabase} plantId={node.id} config={irrigation} t={t} onChanged={onIrrigationChanged} />
+              )}
+            </>
+          ) : section === "device" ? (
+            <SettingsDevice supabase={cav.supabase} plantId={node.id} rows={rows} role={role} t={t} locale={locale} />
           ) : section === "stress" ? (
             <SettingsStress
               summary={cav.summary} loaded={cav.loaded} t={t}

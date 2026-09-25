@@ -22,6 +22,11 @@ const RANGES: Record<string, [number, number]> = {
   humidity_pct: [0, 100],
   pressure_hpa: [300, 1200],
   weight_g: [0, 1_000_000],
+  // Diagnostics (firmware/CONTRACT.md section 1). Wide enough for any real ESP32 value.
+  soil_raw: [0, 4095],
+  wifi_rssi: [-127, 0],
+  free_heap: [0, 100_000_000],
+  uptime_ms: [0, 10_000_000_000_000],
 };
 
 function num(v: unknown, key: string): number | null {
@@ -30,6 +35,12 @@ function num(v: unknown, key: string): number | null {
   if (!Number.isFinite(n)) return null;
   const [lo, hi] = RANGES[key];
   return n >= lo && n <= hi ? n : null;
+}
+
+// The diagnostics are whole numbers; anything fractional is dropped like an out-of-range value.
+function int(v: unknown, key: string): number | null {
+  const n = num(v, key);
+  return n !== null && Number.isInteger(n) ? n : null;
 }
 
 export default {
@@ -66,6 +77,10 @@ export default {
       humidity_pct: num(payload.humidity_pct, "humidity_pct"),
       pressure_hpa: num(payload.pressure_hpa, "pressure_hpa"),
       weight_g: num(payload.weight_g, "weight_g"),
+      soil_raw: int(payload.soil_raw, "soil_raw"),
+      wifi_rssi: int(payload.wifi_rssi, "wifi_rssi"),
+      free_heap: int(payload.free_heap, "free_heap"),
+      uptime_ms: int(payload.uptime_ms, "uptime_ms"),
     };
 
     const { data, error } = await ctx.supabaseAdmin

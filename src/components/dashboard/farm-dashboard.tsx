@@ -347,7 +347,7 @@ export default function FarmDashboard({
             geo={geo} nodes={nodes} selectedId={selectedId} filters={filters} counts={counts}
             onToggleFilter={(s) => setFilters((f) => ({ ...f, [s]: !f[s] }))}
             onSelect={selectNode} layoutFor={layoutFor}
-            orgName={org.name} irrigation={irrigation} onSaveIrrigation={onSaveIrrigation}
+            orgName={org.name} irrigation={irrigation} onSaveIrrigation={onSaveIrrigation} onIrrigationChanged={setIrrigation}
             summary={summary}
           />
         ) : null}

@@ -1,6 +1,6 @@
 "use client";
 
-export type SettingsSection = "plant" | "irrigation" | "stress";
+export type SettingsSection = "plant" | "irrigation" | "stress" | "device";
 
 // The left-top slot for the Settings tab: a vertical list of sections.
 export default function SettingsNav({

@@ -461,6 +461,96 @@ try {
     await client.query("rollback to savepoint lim");
     eq(blocked, true);
   });
+
+  console.log("\nDevice diagnostics, logs, manual pump and OTA");
+  await test("logs: any member reads, other orgs and anon do not, and nobody writes from the client", async () => {
+    await client.query("select append_device_logs($1, $2::jsonb)", [pA, JSON.stringify([
+      { uptime_ms: 1000, level: "event", message: "pump ON for 300s" },
+      { uptime_ms: 2000, level: "warning", message: "DS18B20 read failed" },
+      { uptime_ms: 3000, level: "debug", message: "not a real level" },
+    ])]);
+    const seen = async (u) => (await as(u, () => client.query("select count(*)::int as n from device_logs where plant_id = $1", [pA]))).rows[0].n;
+    eq(await seen(uD), 2, "viewer");
+    eq(await seen(uB), 0, "other org");
+    await as(null, () => denied("select 1 from device_logs"));
+    await as(uA, () => denied("insert into device_logs (plant_id, uptime_ms, level, message) values ($1, 1, 'event', 'x')", [pA]));
+  });
+  await test("only the service role can append logs, and retention keeps 5000 rows and drops anything older than 30 days", async () => {
+    for (const role of ["authenticated", "anon"]) {
+      eq((await client.query("select has_function_privilege($1, 'append_device_logs(uuid,jsonb)', 'execute') as ok", [role])).rows[0].ok, false, role);
+    }
+    await client.query("insert into device_logs (plant_id, uptime_ms, level, message, created_at) values ($1, 1, 'event', 'ancient', now() - interval '31 days')", [pA]);
+    await client.query("insert into device_logs (plant_id, uptime_ms, level, message) select $1, g, 'event', 'bulk '||g from generate_series(1, 5005) g", [pA]);
+    await client.query("select append_device_logs($1, $2::jsonb)", [pA, JSON.stringify([{ uptime_ms: 9, level: "event", message: "latest" }])]);
+    eq((await client.query("select count(*)::int as n from device_logs where plant_id = $1", [pA])).rows[0].n, 5000);
+    eq((await client.query("select count(*)::int as n from device_logs where plant_id = $1 and message in ('ancient')", [pA])).rows[0].n, 0);
+    eq((await client.query("select count(*)::int as n from device_logs where plant_id = $1 and message = 'latest'", [pA])).rows[0].n, 1);
+  });
+  await test("manual pump: the database stamps the command time, a client cannot forge or change it", async () => {
+    await as(uC, () => client.query("insert into irrigation_config (plant_id, manual_pump_on, manual_command_at) values ($1, true, '2000-01-01')", [pA]));
+    const fresh = async () => (await client.query("select (manual_command_at > now() - interval '1 minute') as f from irrigation_config where plant_id = $1", [pA])).rows[0].f;
+    eq(await fresh(), true, "insert stamped by the server");
+    await as(uC, () => client.query("update irrigation_config set hour1 = 9, manual_command_at = '2000-01-01' where plant_id = $1", [pA]));
+    eq(await fresh(), true, "schedule edit must not change the stamp");
+    await as(uC, () => client.query("update irrigation_config set manual_pump_on = false where plant_id = $1", [pA]));
+    eq(await fresh(), true, "toggle change restamps");
+    eq((await as(uD, () => client.query("update irrigation_config set manual_pump_on = true where plant_id = $1", [pA]))).rowCount, 0, "viewer");
+  });
+
+  await client.query("insert into ota_enabled_plants (plant_id) values ($1), ($2)", [pA, pB]);
+  const objectFor = (p, name) => client.query("insert into storage.objects (bucket_id, name, metadata) values ('firmware', $1, '{\"size\": 100000}'::jsonb)", [`${p}/${name}`]);
+  const sha = "a".repeat(64);
+  // Runs a statement as `uid` that must fail with a message containing `code`. The savepoint sits
+  // inside the role switch so the failed statement cannot leave the transaction aborted before
+  // the role is reset.
+  const fails = async (uid, sql, params, code) => {
+    const msg = await as(uid, async () => {
+      await client.query("savepoint f");
+      let m = "";
+      try { await client.query(sql, params); } catch (e) { m = e.message; }
+      await client.query("rollback to savepoint f");
+      return m;
+    });
+    if (!msg.includes(code)) throw new Error(`expected "${code}", got "${msg || "success"}"`);
+  };
+  await test("OTA tables are readable by the plant's Owner only, and never writable from the client", async () => {
+    eq((await as(uA, () => client.query("select count(*)::int as n from ota_enabled_plants"))).rows[0].n, 1);
+    eq((await as(uC, () => client.query("select count(*)::int as n from ota_enabled_plants"))).rows[0].n, 0);
+    await fails(uA, "insert into ota_enabled_plants (plant_id) values ($1)", [pA], "permission denied");
+    await fails(uA, "insert into firmware_target (plant_id, release_id, set_by) values ($1, gen_random_uuid(), $2)", [pA, uA], "permission denied");
+    await fails(uA, "insert into firmware_releases (plant_id, version, storage_path, size_bytes, sha256, uploaded_by) values ($1,'1',$2,100000,$3,$4)", [pA, `${pA}/1.bin`, sha, uA], "permission denied");
+  });
+  await test("OTA upload: only an Owner, only into an OTA-enabled plant's own folder", async () => {
+    await as(uA, () => client.query("insert into storage.objects (bucket_id, name) values ('firmware', $1)", [`${pA}/up.bin`]));
+    await fails(uC, "insert into storage.objects (bucket_id, name) values ('firmware', $1)", [`${pA}/ed.bin`], "row-level security");
+    await fails(uB, "insert into storage.objects (bucket_id, name) values ('firmware', $1)", [`${pA}/other.bin`], "row-level security");
+    await fails(uA, "insert into storage.objects (bucket_id, name) values ('firmware', $1)", [`${randomUUID()}/x.bin`], "row-level security");
+  });
+  await test("register_firmware and set_firmware_target are Owner-only and validate what they are given", async () => {
+    await objectFor(pA, "1.0.0.bin");
+    const reg = (v, path, size = 100000, h = sha) => ["select register_firmware($1,$2,$3,$4,$5)", [pA, v, path, size, h]];
+    for (const u of [uC, uD, uB]) await fails(u, ...reg("1.0.0", `${pA}/1.0.0.bin`), "not_owner");
+    await fails(uA, ...reg("1.0.0", `${pA}/other.bin`), "bad_path");
+    await fails(uA, ...reg("9.9.9", `${pA}/9.9.9.bin`), "file_not_uploaded");
+    await fails(uA, ...reg("1.0.0", `${pA}/1.0.0.bin`, 123), "size_mismatch");
+    await fails(uA, ...reg("1.0.0", `${pA}/1.0.0.bin`, 100000, "nothex"), "sha256_check");
+    const rid = (await as(uA, () => client.query(...reg("1.0.0", `${pA}/1.0.0.bin`)))).rows[0].register_firmware;
+    await fails(uA, ...reg("1.0.0", `${pA}/1.0.0.bin`), "duplicate key");
+    await fails(uC, "select set_firmware_target($1, $2)", [pA, rid], "not_owner");
+    await fails(uA, "select set_firmware_target($1, gen_random_uuid())", [pA], "unknown_release");
+    await as(uA, () => client.query("select set_firmware_target($1, $2)", [pA, rid]));
+    eq((await client.query("select count(*)::int as n from firmware_target where plant_id = $1", [pA])).rows[0].n, 1);
+    eq((await as(uD, () => client.query("select count(*)::int as n from firmware_target"))).rows[0].n, 0, "viewer");
+    await as(uA, () => client.query("select set_firmware_target($1, null)", [pA]));
+    eq((await client.query("select count(*)::int as n from firmware_target where plant_id = $1", [pA])).rows[0].n, 0);
+  });
+  await test("an Owner cannot roll out another org's release, or use a plant that is not OTA-enabled", async () => {
+    const p2 = randomUUID();
+    await client.query("insert into plants (id, org_id, name, api_key_hash) values ($1,$2,'not-enabled',$3)", [p2, oA, randomBytes(8).toString("hex")]);
+    await fails(uA, "select register_firmware($1,'1.0.0',$2,100000,$3)", [p2, `${p2}/1.0.0.bin`, sha], "ota_not_enabled");
+    const rb = (await client.query("insert into firmware_releases (plant_id, version, storage_path, size_bytes, sha256, uploaded_by) values ($1,'1.0.0',$2,100000,$3,$4) returning id", [pB, `${pB}/1.0.0.bin`, sha, uB])).rows[0].id;
+    await fails(uA, "select set_firmware_target($1, $2)", [pA, rb], "unknown_release");
+  });
 } finally {
   await client.query("rollback");
   await client.end();

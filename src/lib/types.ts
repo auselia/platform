@@ -19,7 +19,15 @@ export type Reading = {
   humidity_pct: number | null;
   pressure_hpa: number | null;
   weight_g: number | null;
+  // Device diagnostics (firmware/CONTRACT.md section 1). Null from older firmware.
+  soil_raw?: number | null;
+  wifi_rssi?: number | null;
+  free_heap?: number | null;
+  uptime_ms?: number | null;
 };
+
+export type DeviceLogLevel = "event" | "warning" | "error";
+export type DeviceLog = { id: number; uptime_ms: number; level: DeviceLogLevel; message: string; created_at: string };
 
 export type PlantIngestStatus = {
   plant_id: string;
@@ -39,6 +47,9 @@ export type IrrigationConfig = {
   duration_min: number;
   enabled: boolean;
   updated_at: string;
+  // Manual pump command; manual_command_at is stamped by the database when the toggle changes.
+  manual_pump_on?: boolean;
+  manual_command_at?: string | null;
 };
 
 export type CavClass = "burst" | "spike" | "weak" | "other";
